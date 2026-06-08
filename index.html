@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JaVaultScript</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div id="splashWall" class="splashOverlay">
+      <div class="splashCard">
+        <h2>Initialize Secure Session</h2>
+        <p>Enter a master phrase to derive your local Encryption Key.</p>
+        <form id="masterPhraseForm">
+          <input
+            type="password"
+            id="masterPhraseInput"
+            placeholder="Enter secure master Phrase"
+            required
+            minlength="8"
+          />
+          <button type="submit">Unlock Chat</button>
+        </form>
+      </div>
+    </div>
+
+    <main id="mainApp" class="hidden">
+      <header>
+        <h1>JaVault Workspace</h1>
+        <button id="lockBtn">Lock Session</button>
+      </header>
+      <div id="chatLog"></div>
+      <form id="messageForm">
+        <input
+          type="text"
+          id="messageInput"
+          placeholder="Type a message...."
+          required
+        />
+        <button type="submit">Send</button>
+      </form>
+    </main>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

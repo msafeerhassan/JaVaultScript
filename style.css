@@ -1,0 +1,75 @@
+body {
+    margin: 0;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    background-color: #0f172a;
+    color: #f8fafc
+}
+
+.hidden {
+    display: none !important;
+}
+
+.splashOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(15,23,42,0.95);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+}
+
+.splashCard {
+    background-color: #1e293b;
+    padding: 2.5rem;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+    max-width: 400px;
+    width: 100%;
+    text-align: center;
+}
+
+.splashCard h2 {
+    margin-top: 0;
+    color:#f8fafc;
+}
+
+.splashCard p {
+    color: #94a3b8;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    margin-bottom: 1.5rem;
+}
+
+#masterPhraseForm {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+#masterPhraseForm input {
+    padding: 0.75rem;
+    border-radius: 6px;
+    border: 1px solid #475569;
+    background-color: #0f172a;
+    color: #fff;
+    font-size: 1rem;
+}
+
+#masterPhraseForm button {
+    padding: 0.75rem;
+    border-radius: 6px;
+    border: none;
+    background-color: #3b83f6;
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+#masterPhraseForm button:hover {
+    background-color: #2563eb;
+}

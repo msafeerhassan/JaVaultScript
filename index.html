@@ -29,6 +29,23 @@
         <h1>JaVault Workspace</h1>
         <button id="lockBtn">Lock Session</button>
       </header>
+
+      <section id="signalingGrid" class="signalingGrid">
+        <div class="gridColum">
+          <h3>Local Configuration</h3>
+          <button id="genOfferBtn">1. Generate Connection Offer</button>
+          <label for="localSdpTextArea">Your Local SDP (Copy this): </label>
+          <textarea readonly placeholder="Click generate to create local connection offer...." id="localSdpTextArea"></textarea>
+        </div>
+
+        <div class="gridColum">
+          <h3>Remote Connection Pair-Up</h3>
+          <label for="remoteSdpTextArea">Paste Invite SDP Code here: </label>
+          <textarea placeholder="Paste the remote SDP Offer here." id="remoteSdpTextArea"></textarea>
+          <button id="acceptRemoteBtn">2. Accept Remote Peer Connection Request</button>
+        </div>
+      </section>
+
       <div id="chatLog"></div>
       <form id="messageForm">
         <input

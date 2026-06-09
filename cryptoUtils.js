@@ -102,3 +102,87 @@ export async function decryptText(cipherTextHex, ivHex, cryptoKey) {
 
     return bufferToString(decryptedBuffer)
 }
+
+export async function generateEphemeralKeyPair() {
+    return await window.crypto.subtle.generateKey(
+        {
+            name:"RSA-OAEP",
+            modulusLength: 2048,
+            publicExponent: new Uint8Array([1,0,1]),
+            hash: "SHA-256"
+        },
+        true,
+        ["wrapKey", "unwrapKey"]
+    );
+}
+
+export async function exportPublicKeySpki(publicKey) {
+    return await window.crypto.subtle.exportKey("spki", publicKey);
+}
+
+export function bufferToBase64(buffer){
+    const binStr = String.fromCharCode(...new Uint8Array(buffer));
+    return btoa(binStr);
+}
+
+export function base64ToBuffer(base64Str){
+    const binStr = atob(base64Str);
+    const view = new Uint8Array(binStr.length);
+    for (let i=0; i< binStr.length; i++) {
+        view[i] = binStr.charCodeAt(i);
+    }
+
+    return view.buffer;
+}
+
+export async function importPublicKeySpki(buffer) {
+    return await window.crypto.subtle.importKey(
+        "spki",
+        buffer,
+        {
+            name: "RSA-OAEP",
+            hash: "SHA-256"
+        },
+        true,
+        ['wrapKey']
+    );
+}
+
+export async function generateSharedSessionKey() {
+    return await window.crypto.subtle.generateKey(
+        {
+            name: "AES-GCM",
+            length: 256
+        },
+        true,
+        ["encrypt", "decrypt"]
+    );
+}
+
+export async function wrapSymmetricKey(symmetricKey, rsaPublicKey){
+    return await window.crypto.subtle.wrapKey(
+        "raw",
+        symmetricKey,
+        rsaPublicKey,
+        {
+            name: "RSA-OAEP"
+        }
+    );
+}
+
+export async function unwrapSymetricKey(wrappedBufferKey, rsaPrivateKey) {
+    return await window.crypto.subtle.unwrapKey(
+        "raw",
+        wrappedBufferKey,
+        rsaPrivateKey,
+        {
+            name: "RSA-OAEP"
+        },
+        {
+            name: "AES-GCM",
+            length: 256
+        },
+        true,
+        ["encrypt", "decrypt"]
+    );
+}

@@ -5,6 +5,61 @@ body {
     color: #f8fafc
 }
 
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 2rem;
+    background-color: #1e293b;
+    border-bottom: 1px solid #334155;
+}
+
+.headerTitleContainer {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+header h1{
+    margin: 0;
+    font-size: 1.5rem;
+}
+
+.statusContainer {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background-color: #0f172a;
+    padding: 0.4rem 0.8rem;
+    border-radius: 20px;
+    border: 1px solid #475569;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.statusRing {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    transition: background-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.statusIdle {
+    background-color: #94a3b8;
+    box-shadow: 0 0 8px #94a3b8;
+}
+
+.statusNegotiating {
+    background-color: #f59e0b;
+    box-shadow: 0 0 8px #f59e0b;
+}
+
+.statusConnected {
+    background-color: #10b981;
+    box-shadow: 0 0 8px #10b981;
+}
+
 .hidden {
     display: none !important;
 }
@@ -128,4 +183,53 @@ body {
 
 .gridColum button:hover {
     background-color: #059669;
+}
+
+#chatLog {
+    height: 300px;
+    overflow-y: auto;
+    margin: 1rem;
+    padding: 1rem;
+    background-color: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 8px;
+}
+
+#messageForm {
+    display: flex;
+    gap: 1rem;
+    margin: 1rem;
+}
+
+#messageForm input {
+    flex-grow: 1;
+    padding: 0.75rem;
+    border-radius: 6px;
+    border: 1px solid #475569;
+    background-color: #1e293b;
+    color: #fff;
+}
+
+#messageForm button {
+    padding: 0.75rem 1.5rem;
+    border-radius: 6px;
+    border: none;
+    background-color: #3b83f6;
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+#lockBtn {
+    padding: 0.5rem 1rem;
+    background-color: #ef4444;
+    color: #fff;
+    border-radius: 6px;
+    border: none;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+#lockBtn:hover {
+    background-color: #dc2626;
 }

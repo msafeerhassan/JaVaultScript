@@ -50,15 +50,29 @@ const lockBtn = document.getElementById("lockBtn");
 const statusRing = document.getElementById("statusRing");
 const statusText = document.getElementById("statusText");
 
-function renderMessage(text, direction = "outgoing", timeStr = "") {
+function renderMessage(text, direction = "outgoing", timeStr = "", isImage=false, imageDataUrl = "") {
   const rowEl = document.createElement("div");
   rowEl.classList.add("msgRow", direction);
 
   const bubbleEl = document.createElement("div");
   bubbleEl.classList.add("msgBubble");
 
-  bubbleEl.textContent = text;
+  if(isImage && imageDataUrl) {
+    const imageLink = document.createElement("div");
+    imageLink.href = imageDataUrl;
+    imageLink.download = text || "encryptedImage.png";
 
+    const imageEl = document.createElement("img");
+    imageEl.src = imageDataUrl;
+    imageEl.alt = text || "Secure Image File";
+    imageEl.className = "chatImage";
+
+    imageLink.appendChild(imageEl);
+    bubbleEl.appendChild(imageLink);
+  }
+  else {
+  bubbleEl.textContent = text;
+  }
   if (!timeStr) {
     const now = new Date();
     timeStr = now.toLocaleDateString([], {
@@ -75,6 +89,8 @@ function renderMessage(text, direction = "outgoing", timeStr = "") {
   rowEl.appendChild(bubbleEl);
   chatLog.appendChild(rowEl);
   chatLog.scrollTop = chatLog.scrollHeight;
+
+  return rowEl;
 }
 
 function updateStatusUI(state) {
@@ -192,7 +208,7 @@ async function loadAndDecryptHistory() {
       }
 
       chatSession.history.push(record.text);
-      renderMessage(record.text, record.direction || "outgoing", displayTime);
+      renderMessage(record.text, record.direction || "outgoing", displayTime, record.isImage || false, record.fileData || "");
     } catch (error) {
       console.error("Decryption Failed", error);
     }
@@ -535,44 +551,50 @@ async function handleIncomingMsg(rawWireDate) {
         type: fileContext.mimeType
       });
 
-      const downloadUrl = URL.createObjectURL(combinedBlob);
+      if (fileContext.mimeType && fileContext.mimeType.startsWith("image/")) {
+        const base64Reader = new FileReader();
+        base64Reader.onloadend = async () => {
+          const base64DataUrl = base64Reader.result;
 
+          renderMessage(fileContext.name, "incoming", "", true, base64DataUrl);
+
+          try {
+            const historyPayload = {
+              text: fileContext.name,
+              direction: "incoming",
+              timestamp: Date.now(),
+              isImage: true,
+              fileData: base64DataUrl
+            };
+
+            const encryptedPkg = await encryptText(JSON.stringify(historyPayload), masterStorageKey);
+            const savedHistory = JSON.parse(localStorage.getItem("javault_history") || "[]");
+            savedHistory.push(encryptedPkg);
+            localStorage.setItem("javault_history", JSON.stringify(savedHistory));
+          } catch (error) {
+            console.error("Failed to store incoming image:", error);
+          }
+        };
+        base64Reader.readAsDataURL(combinedBlob);
+      }
+      else {
+      const downloadUrl = URL.createObjectURL(combinedBlob);
       const rowEl = document.createElement("div");
       rowEl.className = "msgRow incoming";
       const bubbleEl = document.createElement("div");
       bubbleEl.className = "msgBubble";
-
-      if (fileContext.mimeType && fileContext.mimeType.startsWith("image/")) {
-        const imageEl = document.createElement("img");
-        imageEl.src = downloadUrl;
-        imageEl.alt = fileContext.name;
-        imageEl.style.maxWidth = "250px";
-        imageEl.style.maxHeight = "250px";
-        imageEl.style.borderRadius = "8px";
-        imageEl.style.display = "block";
-
-        const imageLink = document.createElement("a");
-        imageLink.href = downloadUrl;
-        imageLink.download = fileContext.name;
-        imageLink.appendChild(imageEl);
-        bubbleEl.appendChild(imageLink);
-      }
-      else {
-
       const downloadLink = document.createElement("a");
-
       downloadLink.href = downloadUrl;
       downloadLink.download = fileContext.name;
       downloadLink.textContent = `Download File: ${fileContext.name}`;
       downloadLink.style.color = "#34d399";
       downloadLink.style.fontWeight = "bold";
       downloadLink.style.textDecoration = "underline";
-
       bubbleEl.appendChild(downloadLink);
-      }
       rowEl.appendChild(bubbleEl);
       chatLog.appendChild(rowEl);
       chatLog.scrollTop = chatLog.scrollHeight;
+      }
 
       incomingFileMap.delete(parsedFrame.fileId);
       return;
@@ -608,7 +630,7 @@ async function transferEncryptedFile(file) {
     }
   ));
 
-  renderMessage(`Sending File: ${file.name}`, "outgoing", "");
+  const sendingStatusEl = renderMessage(`Sending File: ${file.name}`, "outgoing", "");
 
   const reader = new FileReader();
   let offset = 0;
@@ -643,24 +665,34 @@ async function transferEncryptedFile(file) {
           fileId: fileId
         }));
 
+        if (sendingStatusEl && sendingStatusEl.parentNode) {
+          sendingStatusEl.parentNode.removeChild(sendingStatusEl);
+        }
+
         if(file.type && file.type.startsWith("image/")) {
-          const localURL = URL.createObjectURL(file);
-          const rowEl = document.createElement("div");
-          bubbleEl.className = "msgBubble";
-
-          const imageEl = document.createElement("img");
-          imageEl.src = localURL;
-          imageEl.alt = file.name;
-          imageEl.style.maxWidth = "250px";
-          imageEl.style.maxHeight = "250px";
-          imageEl.style.borderRadius = "8px";
-          imageEl.style.display = "block";
-
-          bubbleEl.appendChild(imageEl);
-          rowEl.appendChild(bubbleEl);
-          chatLog.appendChild(rowEl);
-          chatLog.scrollTop = chatLog.scrollHeight;
-        } else{
+          const base64Reader = new FileReader();
+          base64Reader.onloadend = async () => {
+            const base64DataUrl = base64Reader.result;
+            renderMessage(file.name, "outgoing", "", true, base64DataUrl);
+            try {
+              const historyPayload = {
+                text: file.name,
+                direction: "outgoing", 
+                timestamp: Date.now(),
+                isImage: true,
+                fileData: base64DataUrl
+              };
+              const encryptedPkg = await encryptText(JSON.stringify(historyPayload), masterStorageKey);
+              const savedHistory = JSON.parse(localStorage.getItem("javault_history") || "[]");
+              savedHistory.push(encryptedPkg);
+              localStorage.setItem("javault_history", JSON.stringify(savedHistory));
+            } catch (error) {
+              console.error("Local History Saving Failed: ", error);
+            }
+          };
+          base64Reader.readAsDataURL(file);
+        }
+        else{
         renderMessage(`Successfully Sent: ${file.name}`, "outgoing", "");
       }
     }

@@ -13,6 +13,8 @@ import {
   generateSharedSessionKey,
   wrapSymmetricKey,
   unwrapSymetricKey,
+  compressString,
+  decompressString
 } from "./cryptoUtils.js";
 
 let chatSession = {
@@ -27,6 +29,11 @@ let masterStorageKey = null;
 let localTypingTimeout = null;
 let isLocallyTyping = false;
 let remoteTypingTimer = null;
+let scannerStream = null;
+let scannerAnimationId = null;
+// const localSdpTextArea = document.getElementById("localSdpTextArea");
+// const remoteSdpTextArea = document.getElementById("remoteSdpTextArea");
+// const acceptRemoteBtn = document.getElementById("acceptRemoteBtn");
 const messageInputEl = document.getElementById("messageInput");
 
 const staticSalt = stringToBuffer("JaVaultScript_Application_Salt_Fixed_16B");
@@ -218,6 +225,7 @@ function initializePeerConnection() {
       localSdpTextArea.value = btoa(
         JSON.stringify(peerConnection.localDescription),
       );
+      updateLocalQrCode(localSdpTextArea.value);
     }
   };
 
@@ -512,6 +520,96 @@ messageInputEl.addEventListener("input", ()=>{
         }, 3000);
     }
 })
+
+async function updateLocalQrCode(rawSdp) {
+  try {
+    const compressedPayLoad = await compressString(rawSdp);
+
+    new QRious({
+      element: document.getElementById("localQrCanvas"),
+      value: compressedPayLoad,
+      size: 250,
+      level: "L"
+    });
+  } catch (error) {
+    console.error("Error:" ,error);
+  }
+}
+
+function startQrScanner() {
+  const video = document.getElementById("scannerVideo");
+  const modal = document.getElementById("qrScanner");
+  modal.classList.remove("hidden");
+
+  navigator.mediaDevices.getUserMedia({
+    video: {
+      facingMode: "environment"
+    }
+  }).then(stream => {
+    scannerStream = stream;
+    video.srcObject = stream;
+    video.setAttribute("playsinline", true);
+    video.play();
+    scannerAnimationId = requestAnimationFrame(tickScanner);
+  }).catch(err => {
+    console.error("Webcam Launch Error: ", err);
+    alert("Unable to lauch video scanner. Check permissions.");
+    hideQrScanner();
+  });
+}
+
+function tickScanner() {
+  const video = document.getElementById("scannerVideo");
+  if(video.readyState === video.HAVE_CURRENT_DATA) {
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+    const code = jsQR(imageData.data, imageData.width, imageData.height, {
+      inversionAttempts: "dontInvert",
+    });
+
+    if(code && code.data) {
+      handleScannedData(code.data);
+      return;
+    }
+  }
+  scannerAnimationId = requestAnimationFrame(tickScanner);
+}
+
+async function handleScannedData(compressedData) {
+  try {
+    const structuralSdp = await decompressString(compressedData);
+    remoteSdpTextArea.value = structuralSdp;
+    hideQrScanner();
+    acceptRemoteBtn.click();
+  } catch (error) {
+    console.error("Decompression failed: ", error);
+    alert("Corrypted Configuration Code");
+    hideQrScanner();
+  }
+}
+
+function hideQrScanner() {
+  document.getElementById("qrScanner").classList.add("hidden");
+  if(scannerStream) {
+    scannerStream.getTracks().forEach(track => track.stop());
+    scannerStream = null;
+  }
+
+  if(scannerAnimationId) {
+    cancelAnimationFrame(scannerAnimationId);
+    scannerAnimationId = null;
+  }
+}
+
+document.getElementById("scanRemoteQrBtn").addEventListener("click", startQrScanner);
+document.getElementById("closeScannerBtn").addEventListener("click", hideQrScanner);
 
 genOfferBtn.addEventListener("click", generateLocalConnectionOffer);
 acceptRemoteBtn.addEventListener("click", acceptRemotePeerConnection);

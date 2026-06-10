@@ -186,3 +186,35 @@ export async function unwrapSymetricKey(wrappedBufferKey, rsaPrivateKey) {
         ["encrypt", "decrypt"]
     );
 }
+
+export async function compressString(str) {
+    if(!str) return "";
+    const stream = new Blob([str]).stream();
+    const compressionStream = new CompressionStream("deflate");
+    const compressedStream = stream.pipeThrough(compressionStream);
+    const response = new Response(compressedStream);
+    const buffer = await response.arrayBuffer();
+
+    const bytes = new Uint8Array(buffer);
+    let binaryStr = "";
+    for (let i = 0; i< bytes.byteLength; i++) {
+        binaryStr += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binaryStr);
+}
+
+export async function decompressString(base64Str) {
+    if(!base64Str) return  "";
+    const binaryStr = atob(base64Str);
+    const bytes = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) {
+        bytes[i] = binaryStr.charCodeAt(i);
+    }
+
+    const stream = new Blob([bytes]).stream();
+    const decompressionStream = new DecompressionStream("deflate");
+    const decompressedStream = stream.pipeThrough(decompressionStream);
+    const response = new Response(decompressedStream);
+
+    return await response.text();
+}

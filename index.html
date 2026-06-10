@@ -24,6 +24,17 @@
       </div>
     </div>
 
+    <div id="qrScanner" class="splashOverlay hidden">
+      <div class="splashCard scannerCard">
+        <h3>Scan Peer QR Code</h3>
+        <p>Grant camera Access and align the QR Code within frame</p>
+        <div class="videoWrapper">
+          <video id="scannerVideo" playsinline></video>
+        </div>
+        <button id="closeScannerBtn" class="cancelBtn" type="button">Cancel Scanning</button>
+      </div>
+    </div>
+
     <main id="mainApp" class="hidden">
       <header>
         <div class="headerTitleContainer">
@@ -42,12 +53,16 @@
           <button id="genOfferBtn">1. Generate Connection Offer</button>
           <label for="localSdpTextArea">Your Local SDP (Copy this): </label>
           <textarea readonly placeholder="Click generate to create local connection offer...." id="localSdpTextArea"></textarea>
+          <div class="qrContainer">
+            <canvas id="localQrCanvas"></canvas>
+          </div>
         </div>
 
         <div class="gridColum">
           <h3>Remote Connection Pair-Up</h3>
           <label for="remoteSdpTextArea">Paste Invite SDP Code here: </label>
           <textarea placeholder="Paste the remote SDP Offer here." id="remoteSdpTextArea"></textarea>
+          <button id="scanRemoteQrBtn">Scan Remote QR Code via Camera</button>
           <button id="acceptRemoteBtn">2. Accept Remote Peer Connection Request</button>
         </div>
       </section>
@@ -65,5 +80,7 @@
     </main>
 
     <script type="module" src="app.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
   </body>
 </html>

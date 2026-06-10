@@ -328,3 +328,63 @@ header h1{
         opacity: 1;
     }
 }
+
+.qrContainer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 1rem;
+    padding: 0.75rem;
+    background-color: #ffffff;
+    border-radius: 8px;
+    width: fit-content;
+    margin-left: auto;
+    margin-right: auto;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+#localQrCanvas {
+    width: 200px;
+    height: 200px;
+    display: block;
+}
+
+#scanRemoteQrBtn {
+    margin-top: 0.25rem;
+    margin-bottom: 0.5rem;
+    background-color: #8b5cf6 !important;
+}
+
+#scanRemoteQrBtn:hover {
+    background-color: #7c3aed !important;
+}
+
+.scannerCard {
+    max-width: 440px;
+    width: 90%;
+}
+
+.videoWrapper {
+    width: 100%;
+    max-height: 320px;
+    overflow: hidden;
+    border-radius: 8px;
+    border: 2px solid #475569;
+    background-color: #000000;
+    margin: 1.25rem 0;
+    position: relative;
+}
+
+#scannerVideo {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.cancelBtn {
+    background-color: #64748b !important;
+}
+
+.cancelBtn:hover {
+    background-color: #475569 !important;
+}

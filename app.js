@@ -542,6 +542,23 @@ async function handleIncomingMsg(rawWireDate) {
       const bubbleEl = document.createElement("div");
       bubbleEl.className = "msgBubble";
 
+      if (fileContext.mimeType && fileContext.mimeType.startsWith("image/")) {
+        const imageEl = document.createElement("img");
+        imageEl.src = downloadUrl;
+        imageEl.alt = fileContext.name;
+        imageEl.style.maxWidth = "250px";
+        imageEl.style.maxHeight = "250px";
+        imageEl.style.borderRadius = "8px";
+        imageEl.style.display = "block";
+
+        const imageLink = document.createElement("a");
+        imageLink.href = downloadUrl;
+        imageLink.download = fileContext.name;
+        imageLink.appendChild(imageEl);
+        bubbleEl.appendChild(imageLink);
+      }
+      else {
+
       const downloadLink = document.createElement("a");
 
       downloadLink.href = downloadUrl;
@@ -552,6 +569,7 @@ async function handleIncomingMsg(rawWireDate) {
       downloadLink.style.textDecoration = "underline";
 
       bubbleEl.appendChild(downloadLink);
+      }
       rowEl.appendChild(bubbleEl);
       chatLog.appendChild(rowEl);
       chatLog.scrollTop = chatLog.scrollHeight;
@@ -567,6 +585,13 @@ async function handleIncomingMsg(rawWireDate) {
 async function transferEncryptedFile(file) {
   if(!dataChannel || dataChannel.readyState !== "open" || !chatSession.key){
     alert("Cannot send file: Connection Inactive");
+    return;
+  }
+
+  const MAX_FILE_SIZE = 10*1024*1024;
+
+  if(file.size > MAX_FILE_SIZE) {
+    alert(`File Rejected: ${file.name} exceeds maxmimum allowed size of 10MB`);
     return;
   }
 
@@ -617,8 +642,28 @@ async function transferEncryptedFile(file) {
           type: "FILE_END",
           fileId: fileId
         }));
+
+        if(file.type && file.type.startsWith("image/")) {
+          const localURL = URL.createObjectURL(file);
+          const rowEl = document.createElement("div");
+          bubbleEl.className = "msgBubble";
+
+          const imageEl = document.createElement("img");
+          imageEl.src = localURL;
+          imageEl.alt = file.name;
+          imageEl.style.maxWidth = "250px";
+          imageEl.style.maxHeight = "250px";
+          imageEl.style.borderRadius = "8px";
+          imageEl.style.display = "block";
+
+          bubbleEl.appendChild(imageEl);
+          rowEl.appendChild(bubbleEl);
+          chatLog.appendChild(rowEl);
+          chatLog.scrollTop = chatLog.scrollHeight;
+        } else{
         renderMessage(`Successfully Sent: ${file.name}`, "outgoing", "");
       }
+    }
     } catch (error) {
       console.error("File Chunk Encryption or transmission fault: ", error);
     }

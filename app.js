@@ -14,13 +14,18 @@ import {
   wrapSymmetricKey,
   unwrapSymetricKey,
   compressString,
-  decompressString
+  decompressString,
+  encryptBuffer,
+  decryptBuffer
 } from "./cryptoUtils.js";
 
 let chatSession = {
   key: null,
   history: [],
 };
+
+let incomingFileMap = new Map();
+const CHUNK_SIZE = 16384;
 
 let localEphemeralKeyPair = null;
 let remotePeerPublicKeyBase64 = null;
@@ -31,9 +36,6 @@ let isLocallyTyping = false;
 let remoteTypingTimer = null;
 let scannerStream = null;
 let scannerAnimationId = null;
-// const localSdpTextArea = document.getElementById("localSdpTextArea");
-// const remoteSdpTextArea = document.getElementById("remoteSdpTextArea");
-// const acceptRemoteBtn = document.getElementById("acceptRemoteBtn");
 const messageInputEl = document.getElementById("messageInput");
 
 const staticSalt = stringToBuffer("JaVaultScript_Application_Salt_Fixed_16B");
@@ -116,12 +118,17 @@ masterPhraseForm.addEventListener("submit", async (event) => {
 
 messageForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const messageInput = document.getElementById("messageInput");
-  const plainText = messageInput.value;
+  const plainText = messageInputEl.value.trim();
   if (!plainText) return;
 
   try {
-    const encryptedPkg = await encryptText(plainText, masterStorageKey);
+
+    const historyPayload = {
+      text: plainText,
+      direction: "outgoing",
+      timestamp: Date.now()
+    };
+    const encryptedPkg = await encryptText(JSON.stringify(historyPayload), masterStorageKey);
 
     const savedHistory = JSON.parse(
       localStorage.getItem("javault_history") || "[]",
@@ -167,13 +174,25 @@ async function loadAndDecryptHistory() {
 
   for (const msgPkg of savedHistory) {
     try {
-      const plainText = await decryptText(
+      const decryptedJSON = await decryptText(
         msgPkg.ciphertext,
         msgPkg.iv,
         masterStorageKey,
       );
-      chatSession.history.push(plainText);
-      renderMessage(plainText, "outgoing");
+
+      const record = JSON.parse(decryptedJSON);
+
+      let displayTime = "";
+
+      if(record.timestamp) {
+        displayTime = new Date(record.timestamp).toLocaleDateString([],{
+          hour: "2-digit",
+          minute: "2-digit"
+        });
+      }
+
+      chatSession.history.push(record.text);
+      renderMessage(record.text, record.direction || "outgoing", displayTime);
     } catch (error) {
       console.error("Decryption Failed", error);
     }
@@ -301,8 +320,6 @@ async function generateLocalConnectionOffer() {
     alert("Strucutre Initialization Failure.");
   }
 }
-
-// genOfferBtn.addEventListener("click", generateLocalConnectionOffer);
 
 async function acceptRemotePeerConnection() {
   const rawInputText = remoteSdpTextArea.value.trim();
@@ -452,6 +469,20 @@ async function handleIncomingMsg(rawWireDate) {
         chatSession.key,
       );
 
+      try {
+        const historyPayload = {
+          text: decryptedText,
+          direction: "incoming",
+          timestamp: parsedFrame.timestamp || Date.now()
+        };
+        const encryptedPkg = await encryptText(JSON.stringify(historyPayload), masterStorageKey);
+        const savedHistory = JSON.parse(localStorage.getItem("javault_history") || "[]");
+        savedHistory.push(encryptedPkg);
+        localStorage.setItem("javault_history", JSON.stringify(savedHistory));
+      } catch (storageError) {
+        console.error("Failed to fetch and store incoming msg: ", storageError);
+      }
+
       let displayTime = "";
       if (parsedFrame.timestamp) {
         const date = new Date(parsedFrame.timestamp);
@@ -462,9 +493,137 @@ async function handleIncomingMsg(rawWireDate) {
       }
       renderMessage(decryptedText, "incoming", displayTime);
     }
+
+    if (parsedFrame && parsedFrame.type === "FILE_START") {
+      incomingFileMap.set(parsedFrame.fileId, {
+        name: parsedFrame.name,
+        mimeType: parsedFrame.mimeType,
+        totalChunks: parsedFrame.totalChunks,
+        receivedCount: 0,
+        chunks: new Array(parsedFrame.totalChunks)
+      });
+
+      renderMessage(`Receiving encrypted file: ${parsedFrame.name}`, "incoming", "");
+      return;
+    }
+
+    if(parsedFrame && parsedFrame.type === "FILE_CHUNK") {
+      const fileContext = incomingFileMap.get(parsedFrame.fileId);
+      if(!fileContext || !chatSession.key) return ;
+
+      try {
+        const decryptedBuffer = await decryptBuffer(
+          parsedFrame.ciphertext,
+          parsedFrame.iv,
+          chatSession.key
+        );
+
+        fileContext.chunks[parsedFrame.chunkIndex] = decryptedBuffer;
+        fileContext.receivedCount++;
+      }
+      catch(decErr){
+        console.error("Failed chunk decryption", decErr);
+      }
+      return;
+    }
+
+    if(parsedFrame && parsedFrame.type === "FILE_END") {
+      const fileContext = incomingFileMap.get(parsedFrame.fileId);
+      if(!fileContext) return;
+      
+      const combinedBlob = new Blob(fileContext.chunks, {
+        type: fileContext.mimeType
+      });
+
+      const downloadUrl = URL.createObjectURL(combinedBlob);
+
+      const rowEl = document.createElement("div");
+      rowEl.className = "msgRow incoming";
+      const bubbleEl = document.createElement("div");
+      bubbleEl.className = "msgBubble";
+
+      const downloadLink = document.createElement("a");
+
+      downloadLink.href = downloadUrl;
+      downloadLink.download = fileContext.name;
+      downloadLink.textContent = `Download File: ${fileContext.name}`;
+      downloadLink.style.color = "#34d399";
+      downloadLink.style.fontWeight = "bold";
+      downloadLink.style.textDecoration = "underline";
+
+      bubbleEl.appendChild(downloadLink);
+      rowEl.appendChild(bubbleEl);
+      chatLog.appendChild(rowEl);
+      chatLog.scrollTop = chatLog.scrollHeight;
+
+      incomingFileMap.delete(parsedFrame.fileId);
+      return;
+    }
   } catch (e) {
     console.error("Error parsing incoming message", e);
   }
+}
+
+async function transferEncryptedFile(file) {
+  if(!dataChannel || dataChannel.readyState !== "open" || !chatSession.key){
+    alert("Cannot send file: Connection Inactive");
+    return;
+  }
+
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+  const fileId = crypto.randomUUID();
+
+  dataChannel.send(JSON.stringify(
+    {
+      type: "FILE_START",
+      fileId: fileId,
+      name: file.name,
+      mimeType: file.type,
+      totalChunks: totalChunks
+    }
+  ));
+
+  renderMessage(`Sending File: ${file.name}`, "outgoing", "");
+
+  const reader = new FileReader();
+  let offset = 0;
+  let chunkIndex = 0;
+
+  const readNextChunk = () => {
+    const slice = file.slice(offset, offset + CHUNK_SIZE);
+    reader.readAsArrayBuffer(slice);
+  }
+
+  reader.onload = async (e) => {
+    const rawBuffer = e.target.result;
+    try {
+      const encryptedPkg = await encryptBuffer(rawBuffer, chatSession.key);
+      dataChannel.send(JSON.stringify({
+        type: "FILE_CHUNK",
+        fileId: fileId,
+        chunkIndex: chunkIndex,
+        iv:encryptedPkg.iv,
+        ciphertext: encryptedPkg.ciphertext
+      }));
+
+      chunkIndex++;
+      offset += CHUNK_SIZE;
+
+      if(offset < file.size) {
+        readNextChunk();
+      }
+      else {
+        dataChannel.send(JSON.stringify({
+          type: "FILE_END",
+          fileId: fileId
+        }));
+        renderMessage(`Successfully Sent: ${file.name}`, "outgoing", "");
+      }
+    } catch (error) {
+      console.error("File Chunk Encryption or transmission fault: ", error);
+    }
+  };
+  readNextChunk();
 }
 
 function showTypingIndicator() {
@@ -610,6 +769,15 @@ function hideQrScanner() {
 
 document.getElementById("scanRemoteQrBtn").addEventListener("click", startQrScanner);
 document.getElementById("closeScannerBtn").addEventListener("click", hideQrScanner);
-
+document.getElementById("fileSelectBtn").addEventListener("click", ()=> {
+  document.getElementById("fileInput").click();
+});
+document.getElementById("fileInput").addEventListener("change", (e)=>{
+  const selectedFile = e.target.files[0];
+  if(selectedFile) {
+    transferEncryptedFile(selectedFile);
+    e.target.value = "";
+  }
+});
 genOfferBtn.addEventListener("click", generateLocalConnectionOffer);
 acceptRemoteBtn.addEventListener("click", acceptRemotePeerConnection);

@@ -218,3 +218,34 @@ export async function decompressString(base64Str) {
 
     return await response.text();
 }
+
+export async function encryptBuffer(dataBuffer, cryptoKey) {
+    const iv = window.crypto.getRandomValues(new Uint8Array(12));
+    const cipherTextBuffer = await window.crypto.subtle.encrypt(
+        {
+            name: "AES-GCM",
+            iv: iv
+        },
+        cryptoKey,
+        dataBuffer
+    );
+
+    return {
+        iv: bufferToHex(iv),
+        ciphertext: bufferToHex(cipherTextBuffer)
+    };
+}
+
+export async function decryptBuffer(cipherTextHex, ivHex, cryptoKey) {
+    const iv = hexToBuffer(ivHex);
+    const ciphertext = hexToBuffer(cipherTextHex);
+
+    return await window.crypto.subtle.decrypt(
+        {
+            name: "AES-GCM",
+            iv: iv
+        },
+        cryptoKey,
+        ciphertext
+    );
+}

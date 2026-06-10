@@ -186,13 +186,16 @@ header h1{
 }
 
 #chatLog {
-    height: 300px;
+    height: 350px;
     overflow-y: auto;
     margin: 1rem;
     padding: 1rem;
     background-color: #1e293b;
     border: 1px solid #334155;
     border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
 }
 
 #messageForm {
@@ -232,4 +235,96 @@ header h1{
 
 #lockBtn:hover {
     background-color: #dc2626;
+}
+
+.msgRow {
+    display: flex;
+    width: 100%;
+}
+
+.msgRow.outgoing {
+    justify-content: flex-end;
+}
+
+.msgRow.incoming {
+    justify-content: flex-start;
+}
+
+.msgBubble {
+    max-width: 70%;
+    padding: 0.6rem 0.9rem;
+    border-radius: 12px;
+    font-size: 0.95rem;
+    line-height: 1.4;
+    word-break: break-word;
+    display: flex;
+    flex-direction: column;
+}
+
+.msgRow.msgRow.outgoing .msgBubble {
+    background-color: #2563eb;
+    color: #ffffff;
+    border-bottom-right-radius: 2px;
+}
+
+.msgRow.msgRow.incoming .msgBubble {
+    background-color: #475569;
+    color: #f8fafc;
+    border-bottom-left-radius: 2px;
+}
+
+.msgMeta {
+    font-size: 0.7rem;
+    color: rgba(248, 250, 252, 0.6);
+    margin-top: 0.25rem;
+    align-self: flex-end;
+}
+
+.typingBubble {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.8rem !important;
+    background-color: #334155 !important;
+}
+
+.typingDots {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+    height: 10px;
+}
+
+.typingDots span {
+    width: 6px;
+    height: 6px;
+    background-color: #94a3b8;
+    border-radius: 50%;
+    display: inline-block;
+    animation: bounceDot 1.4s infinite ease-in-out both;
+}
+
+.typingDots span:nth-child(1) {
+    animation-delay: -0.32s;
+}
+
+.typingDots span:nth-child(2) {
+    animation-delay: -0.16s;
+}
+
+.typingText {
+    font-size: 0.85rem;
+    color: #94a3b8;
+    font-style: italic;
+}
+
+@keyframes bounceDot {
+    0%, 80%, 100% {
+        transform: scale(0);
+        opacity: 0.3;
+    }
+    40% {
+        transform: scale(1);
+        opacity: 1;
+    }
 }

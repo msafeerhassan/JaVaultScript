@@ -31,18 +31,20 @@
         <div class="videoWrapper">
           <video id="scannerVideo" playsinline></video>
         </div>
-        <button id="closeScannerBtn" class="cancelBtn" type="button">Cancel Scanning</button>
+        <button id="closeScannerBtn" class="cancelBtn" type="button">
+          Cancel Scanning
+        </button>
       </div>
     </div>
 
     <main id="mainApp" class="hidden">
       <header>
         <div class="headerTitleContainer">
-        <h1>JaVault Workspace</h1>
-        <div class="statusContainer">
-          <span id="statusRing" class="statusRing statusIdle"></span>
-          <span id="statusText">Disconnected</span>
-        </div>
+          <h1>JaVault Workspace</h1>
+          <div class="statusContainer">
+            <span id="statusRing" class="statusRing statusIdle"></span>
+            <span id="statusText">Disconnected</span>
+          </div>
         </div>
         <button id="lockBtn">Lock Session</button>
       </header>
@@ -52,7 +54,11 @@
           <h3>Local Configuration</h3>
           <button id="genOfferBtn">1. Generate Connection Offer</button>
           <label for="localSdpTextArea">Your Local SDP (Copy this): </label>
-          <textarea readonly placeholder="Click generate to create local connection offer...." id="localSdpTextArea"></textarea>
+          <textarea
+            readonly
+            placeholder="Click generate to create local connection offer...."
+            id="localSdpTextArea"
+          ></textarea>
           <div class="qrContainer">
             <canvas id="localQrCanvas"></canvas>
           </div>
@@ -61,15 +67,20 @@
         <div class="gridColum">
           <h3>Remote Connection Pair-Up</h3>
           <label for="remoteSdpTextArea">Paste Invite SDP Code here: </label>
-          <textarea placeholder="Paste the remote SDP Offer here." id="remoteSdpTextArea"></textarea>
+          <textarea
+            placeholder="Paste the remote SDP Offer here."
+            id="remoteSdpTextArea"
+          ></textarea>
           <button id="scanRemoteQrBtn">Scan Remote QR Code via Camera</button>
-          <button id="acceptRemoteBtn">2. Accept Remote Peer Connection Request</button>
+          <button id="acceptRemoteBtn">
+            2. Accept Remote Peer Connection Request
+          </button>
         </div>
       </section>
 
       <div id="chatLog"></div>
       <form id="messageForm">
-        <input type="file" class="hidden" id="fileInput">
+        <input type="file" class="hidden" id="fileInput" />
         <input
           type="text"
           id="messageInput"
@@ -82,6 +93,6 @@
 
     <script type="module" src="app.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
   </body>
 </html>

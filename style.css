@@ -1,407 +1,422 @@
 body {
-    margin: 0;
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-    background-color: #0f172a;
-    color: #f8fafc
+  margin: 0;
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    Oxygen,
+    Ubuntu,
+    Cantarell,
+    "Open Sans",
+    "Helvetica Neue",
+    sans-serif;
+  background-color: #0f172a;
+  color: #f8fafc;
 }
 
 header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 1rem 2rem;
-    background-color: #1e293b;
-    border-bottom: 1px solid #334155;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 2rem;
+  background-color: #1e293b;
+  border-bottom: 1px solid #334155;
 }
 
 .headerTitleContainer {
-    display: flex;
-    align-items: center;
-    gap: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
 }
 
-header h1{
-    margin: 0;
-    font-size: 1.5rem;
+header h1 {
+  margin: 0;
+  font-size: 1.5rem;
 }
 
 .statusContainer {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    background-color: #0f172a;
-    padding: 0.4rem 0.8rem;
-    border-radius: 20px;
-    border: 1px solid #475569;
-    font-size: 0.85rem;
-    font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: #0f172a;
+  padding: 0.4rem 0.8rem;
+  border-radius: 20px;
+  border: 1px solid #475569;
+  font-size: 0.85rem;
+  font-weight: 500;
 }
 
 .statusRing {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    display: inline-block;
-    transition: background-color 0.3s ease, box-shadow 0.3s ease;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  transition:
+    background-color 0.3s ease,
+    box-shadow 0.3s ease;
 }
 
 .statusIdle {
-    background-color: #94a3b8;
-    box-shadow: 0 0 8px #94a3b8;
+  background-color: #94a3b8;
+  box-shadow: 0 0 8px #94a3b8;
 }
 
 .statusNegotiating {
-    background-color: #f59e0b;
-    box-shadow: 0 0 8px #f59e0b;
+  background-color: #f59e0b;
+  box-shadow: 0 0 8px #f59e0b;
 }
 
 .statusConnected {
-    background-color: #10b981;
-    box-shadow: 0 0 8px #10b981;
+  background-color: #10b981;
+  box-shadow: 0 0 8px #10b981;
 }
 
 .hidden {
-    display: none !important;
+  display: none !important;
 }
 
 .splashOverlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background-color: rgba(15,23,42,0.95);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 9999;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(15, 23, 42, 0.95);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
 }
 
 .splashCard {
-    background-color: #1e293b;
-    padding: 2.5rem;
-    border-radius: 12px;
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
-    max-width: 400px;
-    width: 100%;
-    text-align: center;
+  background-color: #1e293b;
+  padding: 2.5rem;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+  max-width: 400px;
+  width: 100%;
+  text-align: center;
 }
 
 .splashCard h2 {
-    margin-top: 0;
-    color:#f8fafc;
+  margin-top: 0;
+  color: #f8fafc;
 }
 
 .splashCard p {
-    color: #94a3b8;
-    font-size: 0.9rem;
-    line-height: 1.5;
-    margin-bottom: 1.5rem;
+  color: #94a3b8;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin-bottom: 1.5rem;
 }
 
 #masterPhraseForm {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
 
 #masterPhraseForm input {
-    padding: 0.75rem;
-    border-radius: 6px;
-    border: 1px solid #475569;
-    background-color: #0f172a;
-    color: #fff;
-    font-size: 1rem;
+  padding: 0.75rem;
+  border-radius: 6px;
+  border: 1px solid #475569;
+  background-color: #0f172a;
+  color: #fff;
+  font-size: 1rem;
 }
 
 #masterPhraseForm button {
-    padding: 0.75rem;
-    border-radius: 6px;
-    border: none;
-    background-color: #3b83f6;
-    color: #fff;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background 0.2s;
+  padding: 0.75rem;
+  border-radius: 6px;
+  border: none;
+  background-color: #3b83f6;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
 }
 
 #masterPhraseForm button:hover {
-    background-color: #2563eb;
+  background-color: #2563eb;
 }
 
 .signalingGrid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1.5rem;
-    margin: 1rem;
-    padding: 1rem;
-    background-color: #1e293b;
-    border-radius: 8px;
-    border: 1px solid #334155;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin: 1rem;
+  padding: 1rem;
+  background-color: #1e293b;
+  border-radius: 8px;
+  border: 1px solid #334155;
 }
 
 .gridColum {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
 .gridColum h3 {
-    margin: 0 0 0.25rem 0;
-    font-size: 1.1rem;
-    color: #3b83f6;
+  margin: 0 0 0.25rem 0;
+  font-size: 1.1rem;
+  color: #3b83f6;
 }
 
 .gridColum label {
-    font-size: 0.85rem;
-    color: #94a3b8;
+  font-size: 0.85rem;
+  color: #94a3b8;
 }
 
 .gridColum textarea {
-    width: 100%;
-    height: 120px;
-    box-sizing: border-box;
-    padding: 0.5rem;
-    border-radius: 6px;
-    border: 1px solid #475569;
-    background-color: #0f172a;
-    color: #34d399;
-    font-family: monospace;
-    resize: none;
+  width: 100%;
+  height: 120px;
+  box-sizing: border-box;
+  padding: 0.5rem;
+  border-radius: 6px;
+  border: 1px solid #475569;
+  background-color: #0f172a;
+  color: #34d399;
+  font-family: monospace;
+  resize: none;
 }
 
-.gridColum button{
-    padding: 0.6rem;
-    border-radius: 6px;
-    border: none;
-    background-color: #10b981;
-    color: #fff;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background 0.2s;
+.gridColum button {
+  padding: 0.6rem;
+  border-radius: 6px;
+  border: none;
+  background-color: #10b981;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
 }
 
 .gridColum button:hover {
-    background-color: #059669;
+  background-color: #059669;
 }
 
 #chatLog {
-    height: 350px;
-    overflow-y: auto;
-    margin: 1rem;
-    padding: 1rem;
-    background-color: #1e293b;
-    border: 1px solid #334155;
-    border-radius: 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
+  height: 350px;
+  overflow-y: auto;
+  margin: 1rem;
+  padding: 1rem;
+  background-color: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
 #messageForm {
-    display: flex;
-    gap: 1rem;
-    margin: 1rem;
+  display: flex;
+  gap: 1rem;
+  margin: 1rem;
 }
 
 #messageForm input {
-    flex-grow: 1;
-    padding: 0.75rem;
-    border-radius: 6px;
-    border: 1px solid #475569;
-    background-color: #1e293b;
-    color: #fff;
+  flex-grow: 1;
+  padding: 0.75rem;
+  border-radius: 6px;
+  border: 1px solid #475569;
+  background-color: #1e293b;
+  color: #fff;
 }
 
 #messageForm button {
-    padding: 0.75rem 1.5rem;
-    border-radius: 6px;
-    border: none;
-    background-color: #3b83f6;
-    color: #fff;
-    font-weight: 600;
-    cursor: pointer;
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  border: none;
+  background-color: #3b83f6;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 #lockBtn {
-    padding: 0.5rem 1rem;
-    background-color: #ef4444;
-    color: #fff;
-    border-radius: 6px;
-    border: none;
-    font-weight: 600;
-    cursor: pointer;
+  padding: 0.5rem 1rem;
+  background-color: #ef4444;
+  color: #fff;
+  border-radius: 6px;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 #lockBtn:hover {
-    background-color: #dc2626;
+  background-color: #dc2626;
 }
 
 .msgRow {
-    display: flex;
-    width: 100%;
+  display: flex;
+  width: 100%;
 }
 
 .msgRow.outgoing {
-    justify-content: flex-end;
+  justify-content: flex-end;
 }
 
 .msgRow.incoming {
-    justify-content: flex-start;
+  justify-content: flex-start;
 }
 
 .msgBubble {
-    max-width: 70%;
-    padding: 0.6rem 0.9rem;
-    border-radius: 12px;
-    font-size: 0.95rem;
-    line-height: 1.4;
-    word-break: break-word;
-    display: flex;
-    flex-direction: column;
+  max-width: 70%;
+  padding: 0.6rem 0.9rem;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  word-break: break-word;
+  display: flex;
+  flex-direction: column;
 }
 
 .msgRow.msgRow.outgoing .msgBubble {
-    background-color: #2563eb;
-    color: #ffffff;
-    border-bottom-right-radius: 2px;
+  background-color: #2563eb;
+  color: #ffffff;
+  border-bottom-right-radius: 2px;
 }
 
 .msgRow.msgRow.incoming .msgBubble {
-    background-color: #475569;
-    color: #f8fafc;
-    border-bottom-left-radius: 2px;
+  background-color: #475569;
+  color: #f8fafc;
+  border-bottom-left-radius: 2px;
 }
 
 .msgMeta {
-    font-size: 0.7rem;
-    color: rgba(248, 250, 252, 0.6);
-    margin-top: 0.25rem;
-    align-self: flex-end;
+  font-size: 0.7rem;
+  color: rgba(248, 250, 252, 0.6);
+  margin-top: 0.25rem;
+  align-self: flex-end;
 }
 
 .typingBubble {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 0.8rem !important;
-    background-color: #334155 !important;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.8rem !important;
+  background-color: #334155 !important;
 }
 
 .typingDots {
-    display: flex;
-    align-items: center;
-    gap: 0.2rem;
-    height: 10px;
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  height: 10px;
 }
 
 .typingDots span {
-    width: 6px;
-    height: 6px;
-    background-color: #94a3b8;
-    border-radius: 50%;
-    display: inline-block;
-    animation: bounceDot 1.4s infinite ease-in-out both;
+  width: 6px;
+  height: 6px;
+  background-color: #94a3b8;
+  border-radius: 50%;
+  display: inline-block;
+  animation: bounceDot 1.4s infinite ease-in-out both;
 }
 
 .typingDots span:nth-child(1) {
-    animation-delay: -0.32s;
+  animation-delay: -0.32s;
 }
 
 .typingDots span:nth-child(2) {
-    animation-delay: -0.16s;
+  animation-delay: -0.16s;
 }
 
 .typingText {
-    font-size: 0.85rem;
-    color: #94a3b8;
-    font-style: italic;
+  font-size: 0.85rem;
+  color: #94a3b8;
+  font-style: italic;
 }
 
 @keyframes bounceDot {
-    0%, 80%, 100% {
-        transform: scale(0);
-        opacity: 0.3;
-    }
-    40% {
-        transform: scale(1);
-        opacity: 1;
-    }
+  0%,
+  80%,
+  100% {
+    transform: scale(0);
+    opacity: 0.3;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 .qrContainer {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    margin-top: 1rem;
-    padding: 0.75rem;
-    background-color: #ffffff;
-    border-radius: 8px;
-    width: fit-content;
-    margin-left: auto;
-    margin-right: auto;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background-color: #ffffff;
+  border-radius: 8px;
+  width: fit-content;
+  margin-left: auto;
+  margin-right: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
 
 #localQrCanvas {
-    width: 200px;
-    height: 200px;
-    display: block;
+  width: 200px;
+  height: 200px;
+  display: block;
 }
 
 #scanRemoteQrBtn {
-    margin-top: 0.25rem;
-    margin-bottom: 0.5rem;
-    background-color: #8b5cf6 !important;
+  margin-top: 0.25rem;
+  margin-bottom: 0.5rem;
+  background-color: #8b5cf6 !important;
 }
 
 #scanRemoteQrBtn:hover {
-    background-color: #7c3aed !important;
+  background-color: #7c3aed !important;
 }
 
 .scannerCard {
-    max-width: 440px;
-    width: 90%;
+  max-width: 440px;
+  width: 90%;
 }
 
 .videoWrapper {
-    width: 100%;
-    max-height: 320px;
-    overflow: hidden;
-    border-radius: 8px;
-    border: 2px solid #475569;
-    background-color: #000000;
-    margin: 1.25rem 0;
-    position: relative;
+  width: 100%;
+  max-height: 320px;
+  overflow: hidden;
+  border-radius: 8px;
+  border: 2px solid #475569;
+  background-color: #000000;
+  margin: 1.25rem 0;
+  position: relative;
 }
 
 #scannerVideo {
-    width: 100%;
-    height: auto;
-    display: block;
+  width: 100%;
+  height: auto;
+  display: block;
 }
 
 .cancelBtn {
-    background-color: #64748b !important;
+  background-color: #64748b !important;
 }
 
 .cancelBtn:hover {
-    background-color: #475569 !important;
+  background-color: #475569 !important;
 }
 
 .chatImage {
-    max-width: 260px;
-    max-height: 260px;
-    border-radius: 8px;
-    display: block;
-    object-fit: contain;
-    margin-top: 4px;
-    cursor: pointer;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-    transition: transform 0.2s ease box-shadow 0.2s ease;
+  max-width: 260px;
+  max-height: 260px;
+  border-radius: 8px;
+  display: block;
+  object-fit: contain;
+  margin-top: 4px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s ease box-shadow 0.2s ease;
 }
 
 .chatImage:hover {
-    transform: scale(1.02);
-    box-shadow: 0 4px 12px rgba(52, 211, 153, 0.3);
+  transform: scale(1.02);
+  box-shadow: 0 4px 12px rgba(52, 211, 153, 0.3);
 }

@@ -16,7 +16,7 @@ import {
   compressString,
   decompressString,
   encryptBuffer,
-  decryptBuffer
+  decryptBuffer,
 } from "./cryptoUtils.js";
 
 let chatSession = {
@@ -50,14 +50,20 @@ const lockBtn = document.getElementById("lockBtn");
 const statusRing = document.getElementById("statusRing");
 const statusText = document.getElementById("statusText");
 
-function renderMessage(text, direction = "outgoing", timeStr = "", isImage=false, imageDataUrl = "") {
+function renderMessage(
+  text,
+  direction = "outgoing",
+  timeStr = "",
+  isImage = false,
+  imageDataUrl = "",
+) {
   const rowEl = document.createElement("div");
   rowEl.classList.add("msgRow", direction);
 
   const bubbleEl = document.createElement("div");
   bubbleEl.classList.add("msgBubble");
 
-  if(isImage && imageDataUrl) {
+  if (isImage && imageDataUrl) {
     const imageLink = document.createElement("div");
     imageLink.href = imageDataUrl;
     imageLink.download = text || "encryptedImage.png";
@@ -69,9 +75,8 @@ function renderMessage(text, direction = "outgoing", timeStr = "", isImage=false
 
     imageLink.appendChild(imageEl);
     bubbleEl.appendChild(imageLink);
-  }
-  else {
-  bubbleEl.textContent = text;
+  } else {
+    bubbleEl.textContent = text;
   }
   if (!timeStr) {
     const now = new Date();
@@ -138,13 +143,15 @@ messageForm.addEventListener("submit", async (event) => {
   if (!plainText) return;
 
   try {
-
     const historyPayload = {
       text: plainText,
       direction: "outgoing",
-      timestamp: Date.now()
+      timestamp: Date.now(),
     };
-    const encryptedPkg = await encryptText(JSON.stringify(historyPayload), masterStorageKey);
+    const encryptedPkg = await encryptText(
+      JSON.stringify(historyPayload),
+      masterStorageKey,
+    );
 
     const savedHistory = JSON.parse(
       localStorage.getItem("javault_history") || "[]",
@@ -200,15 +207,21 @@ async function loadAndDecryptHistory() {
 
       let displayTime = "";
 
-      if(record.timestamp) {
-        displayTime = new Date(record.timestamp).toLocaleDateString([],{
+      if (record.timestamp) {
+        displayTime = new Date(record.timestamp).toLocaleDateString([], {
           hour: "2-digit",
-          minute: "2-digit"
+          minute: "2-digit",
         });
       }
 
       chatSession.history.push(record.text);
-      renderMessage(record.text, record.direction || "outgoing", displayTime, record.isImage || false, record.fileData || "");
+      renderMessage(
+        record.text,
+        record.direction || "outgoing",
+        displayTime,
+        record.isImage || false,
+        record.fileData || "",
+      );
     } catch (error) {
       console.error("Decryption Failed", error);
     }
@@ -489,10 +502,15 @@ async function handleIncomingMsg(rawWireDate) {
         const historyPayload = {
           text: decryptedText,
           direction: "incoming",
-          timestamp: parsedFrame.timestamp || Date.now()
+          timestamp: parsedFrame.timestamp || Date.now(),
         };
-        const encryptedPkg = await encryptText(JSON.stringify(historyPayload), masterStorageKey);
-        const savedHistory = JSON.parse(localStorage.getItem("javault_history") || "[]");
+        const encryptedPkg = await encryptText(
+          JSON.stringify(historyPayload),
+          masterStorageKey,
+        );
+        const savedHistory = JSON.parse(
+          localStorage.getItem("javault_history") || "[]",
+        );
         savedHistory.push(encryptedPkg);
         localStorage.setItem("javault_history", JSON.stringify(savedHistory));
       } catch (storageError) {
@@ -516,39 +534,42 @@ async function handleIncomingMsg(rawWireDate) {
         mimeType: parsedFrame.mimeType,
         totalChunks: parsedFrame.totalChunks,
         receivedCount: 0,
-        chunks: new Array(parsedFrame.totalChunks)
+        chunks: new Array(parsedFrame.totalChunks),
       });
 
-      renderMessage(`Receiving encrypted file: ${parsedFrame.name}`, "incoming", "");
+      renderMessage(
+        `Receiving encrypted file: ${parsedFrame.name}`,
+        "incoming",
+        "",
+      );
       return;
     }
 
-    if(parsedFrame && parsedFrame.type === "FILE_CHUNK") {
+    if (parsedFrame && parsedFrame.type === "FILE_CHUNK") {
       const fileContext = incomingFileMap.get(parsedFrame.fileId);
-      if(!fileContext || !chatSession.key) return ;
+      if (!fileContext || !chatSession.key) return;
 
       try {
         const decryptedBuffer = await decryptBuffer(
           parsedFrame.ciphertext,
           parsedFrame.iv,
-          chatSession.key
+          chatSession.key,
         );
 
         fileContext.chunks[parsedFrame.chunkIndex] = decryptedBuffer;
         fileContext.receivedCount++;
-      }
-      catch(decErr){
+      } catch (decErr) {
         console.error("Failed chunk decryption", decErr);
       }
       return;
     }
 
-    if(parsedFrame && parsedFrame.type === "FILE_END") {
+    if (parsedFrame && parsedFrame.type === "FILE_END") {
       const fileContext = incomingFileMap.get(parsedFrame.fileId);
-      if(!fileContext) return;
-      
+      if (!fileContext) return;
+
       const combinedBlob = new Blob(fileContext.chunks, {
-        type: fileContext.mimeType
+        type: fileContext.mimeType,
       });
 
       if (fileContext.mimeType && fileContext.mimeType.startsWith("image/")) {
@@ -564,36 +585,43 @@ async function handleIncomingMsg(rawWireDate) {
               direction: "incoming",
               timestamp: Date.now(),
               isImage: true,
-              fileData: base64DataUrl
+              fileData: base64DataUrl,
             };
 
-            const encryptedPkg = await encryptText(JSON.stringify(historyPayload), masterStorageKey);
-            const savedHistory = JSON.parse(localStorage.getItem("javault_history") || "[]");
+            const encryptedPkg = await encryptText(
+              JSON.stringify(historyPayload),
+              masterStorageKey,
+            );
+            const savedHistory = JSON.parse(
+              localStorage.getItem("javault_history") || "[]",
+            );
             savedHistory.push(encryptedPkg);
-            localStorage.setItem("javault_history", JSON.stringify(savedHistory));
+            localStorage.setItem(
+              "javault_history",
+              JSON.stringify(savedHistory),
+            );
           } catch (error) {
             console.error("Failed to store incoming image:", error);
           }
         };
         base64Reader.readAsDataURL(combinedBlob);
-      }
-      else {
-      const downloadUrl = URL.createObjectURL(combinedBlob);
-      const rowEl = document.createElement("div");
-      rowEl.className = "msgRow incoming";
-      const bubbleEl = document.createElement("div");
-      bubbleEl.className = "msgBubble";
-      const downloadLink = document.createElement("a");
-      downloadLink.href = downloadUrl;
-      downloadLink.download = fileContext.name;
-      downloadLink.textContent = `Download File: ${fileContext.name}`;
-      downloadLink.style.color = "#34d399";
-      downloadLink.style.fontWeight = "bold";
-      downloadLink.style.textDecoration = "underline";
-      bubbleEl.appendChild(downloadLink);
-      rowEl.appendChild(bubbleEl);
-      chatLog.appendChild(rowEl);
-      chatLog.scrollTop = chatLog.scrollHeight;
+      } else {
+        const downloadUrl = URL.createObjectURL(combinedBlob);
+        const rowEl = document.createElement("div");
+        rowEl.className = "msgRow incoming";
+        const bubbleEl = document.createElement("div");
+        bubbleEl.className = "msgBubble";
+        const downloadLink = document.createElement("a");
+        downloadLink.href = downloadUrl;
+        downloadLink.download = fileContext.name;
+        downloadLink.textContent = `Download File: ${fileContext.name}`;
+        downloadLink.style.color = "#34d399";
+        downloadLink.style.fontWeight = "bold";
+        downloadLink.style.textDecoration = "underline";
+        bubbleEl.appendChild(downloadLink);
+        rowEl.appendChild(bubbleEl);
+        chatLog.appendChild(rowEl);
+        chatLog.scrollTop = chatLog.scrollHeight;
       }
 
       incomingFileMap.delete(parsedFrame.fileId);
@@ -605,14 +633,14 @@ async function handleIncomingMsg(rawWireDate) {
 }
 
 async function transferEncryptedFile(file) {
-  if(!dataChannel || dataChannel.readyState !== "open" || !chatSession.key){
+  if (!dataChannel || dataChannel.readyState !== "open" || !chatSession.key) {
     alert("Cannot send file: Connection Inactive");
     return;
   }
 
-  const MAX_FILE_SIZE = 10*1024*1024;
+  const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
-  if(file.size > MAX_FILE_SIZE) {
+  if (file.size > MAX_FILE_SIZE) {
     alert(`File Rejected: ${file.name} exceeds maxmimum allowed size of 10MB`);
     return;
   }
@@ -620,17 +648,21 @@ async function transferEncryptedFile(file) {
   const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
   const fileId = crypto.randomUUID();
 
-  dataChannel.send(JSON.stringify(
-    {
+  dataChannel.send(
+    JSON.stringify({
       type: "FILE_START",
       fileId: fileId,
       name: file.name,
       mimeType: file.type,
-      totalChunks: totalChunks
-    }
-  ));
+      totalChunks: totalChunks,
+    }),
+  );
 
-  const sendingStatusEl = renderMessage(`Sending File: ${file.name}`, "outgoing", "");
+  const sendingStatusEl = renderMessage(
+    `Sending File: ${file.name}`,
+    "outgoing",
+    "",
+  );
 
   const reader = new FileReader();
   let offset = 0;
@@ -639,37 +671,40 @@ async function transferEncryptedFile(file) {
   const readNextChunk = () => {
     const slice = file.slice(offset, offset + CHUNK_SIZE);
     reader.readAsArrayBuffer(slice);
-  }
+  };
 
   reader.onload = async (e) => {
     const rawBuffer = e.target.result;
     try {
       const encryptedPkg = await encryptBuffer(rawBuffer, chatSession.key);
-      dataChannel.send(JSON.stringify({
-        type: "FILE_CHUNK",
-        fileId: fileId,
-        chunkIndex: chunkIndex,
-        iv:encryptedPkg.iv,
-        ciphertext: encryptedPkg.ciphertext
-      }));
+      dataChannel.send(
+        JSON.stringify({
+          type: "FILE_CHUNK",
+          fileId: fileId,
+          chunkIndex: chunkIndex,
+          iv: encryptedPkg.iv,
+          ciphertext: encryptedPkg.ciphertext,
+        }),
+      );
 
       chunkIndex++;
       offset += CHUNK_SIZE;
 
-      if(offset < file.size) {
+      if (offset < file.size) {
         readNextChunk();
-      }
-      else {
-        dataChannel.send(JSON.stringify({
-          type: "FILE_END",
-          fileId: fileId
-        }));
+      } else {
+        dataChannel.send(
+          JSON.stringify({
+            type: "FILE_END",
+            fileId: fileId,
+          }),
+        );
 
         if (sendingStatusEl && sendingStatusEl.parentNode) {
           sendingStatusEl.parentNode.removeChild(sendingStatusEl);
         }
 
-        if(file.type && file.type.startsWith("image/")) {
+        if (file.type && file.type.startsWith("image/")) {
           const base64Reader = new FileReader();
           base64Reader.onloadend = async () => {
             const base64DataUrl = base64Reader.result;
@@ -677,25 +712,32 @@ async function transferEncryptedFile(file) {
             try {
               const historyPayload = {
                 text: file.name,
-                direction: "outgoing", 
+                direction: "outgoing",
                 timestamp: Date.now(),
                 isImage: true,
-                fileData: base64DataUrl
+                fileData: base64DataUrl,
               };
-              const encryptedPkg = await encryptText(JSON.stringify(historyPayload), masterStorageKey);
-              const savedHistory = JSON.parse(localStorage.getItem("javault_history") || "[]");
+              const encryptedPkg = await encryptText(
+                JSON.stringify(historyPayload),
+                masterStorageKey,
+              );
+              const savedHistory = JSON.parse(
+                localStorage.getItem("javault_history") || "[]",
+              );
               savedHistory.push(encryptedPkg);
-              localStorage.setItem("javault_history", JSON.stringify(savedHistory));
+              localStorage.setItem(
+                "javault_history",
+                JSON.stringify(savedHistory),
+              );
             } catch (error) {
               console.error("Local History Saving Failed: ", error);
             }
           };
           base64Reader.readAsDataURL(file);
+        } else {
+          renderMessage(`Successfully Sent: ${file.name}`, "outgoing", "");
         }
-        else{
-        renderMessage(`Successfully Sent: ${file.name}`, "outgoing", "");
       }
-    }
     } catch (error) {
       console.error("File Chunk Encryption or transmission fault: ", error);
     }
@@ -728,34 +770,37 @@ function showTypingIndicator() {
   remoteTypingTimer = setTimeout(() => {
     hideTypingIndicator();
   }, 3500);
-
 }
 
-function hideTypingIndicator(){
-    const indicator = document.getElementById("typingIndicator");
-    if(indicator) {
-        indicator.remove();
-    }
+function hideTypingIndicator() {
+  const indicator = document.getElementById("typingIndicator");
+  if (indicator) {
+    indicator.remove();
+  }
 }
 
-messageInputEl.addEventListener("input", ()=>{
-    if(dataChannel && dataChannel.readyState === "open") {
-        if(!isLocallyTyping) {
-            isLocallyTyping = true;
-            dataChannel.send(JSON.stringify({
-                status: "typing"
-            }));
-        }
-
-        clearTimeout(localTypingTimeout);
-        localTypingTimeout = setTimeout(() => {
-            isLocallyTyping = false;
-            dataChannel.send(JSON.stringify({
-                status: "idle"
-            }));
-        }, 3000);
+messageInputEl.addEventListener("input", () => {
+  if (dataChannel && dataChannel.readyState === "open") {
+    if (!isLocallyTyping) {
+      isLocallyTyping = true;
+      dataChannel.send(
+        JSON.stringify({
+          status: "typing",
+        }),
+      );
     }
-})
+
+    clearTimeout(localTypingTimeout);
+    localTypingTimeout = setTimeout(() => {
+      isLocallyTyping = false;
+      dataChannel.send(
+        JSON.stringify({
+          status: "idle",
+        }),
+      );
+    }, 3000);
+  }
+});
 
 async function updateLocalQrCode(rawSdp) {
   try {
@@ -765,10 +810,10 @@ async function updateLocalQrCode(rawSdp) {
       element: document.getElementById("localQrCanvas"),
       value: compressedPayLoad,
       size: 250,
-      level: "L"
+      level: "L",
     });
   } catch (error) {
-    console.error("Error:" ,error);
+    console.error("Error:", error);
   }
 }
 
@@ -777,26 +822,29 @@ function startQrScanner() {
   const modal = document.getElementById("qrScanner");
   modal.classList.remove("hidden");
 
-  navigator.mediaDevices.getUserMedia({
-    video: {
-      facingMode: "environment"
-    }
-  }).then(stream => {
-    scannerStream = stream;
-    video.srcObject = stream;
-    video.setAttribute("playsinline", true);
-    video.play();
-    scannerAnimationId = requestAnimationFrame(tickScanner);
-  }).catch(err => {
-    console.error("Webcam Launch Error: ", err);
-    alert("Unable to lauch video scanner. Check permissions.");
-    hideQrScanner();
-  });
+  navigator.mediaDevices
+    .getUserMedia({
+      video: {
+        facingMode: "environment",
+      },
+    })
+    .then((stream) => {
+      scannerStream = stream;
+      video.srcObject = stream;
+      video.setAttribute("playsinline", true);
+      video.play();
+      scannerAnimationId = requestAnimationFrame(tickScanner);
+    })
+    .catch((err) => {
+      console.error("Webcam Launch Error: ", err);
+      alert("Unable to lauch video scanner. Check permissions.");
+      hideQrScanner();
+    });
 }
 
 function tickScanner() {
   const video = document.getElementById("scannerVideo");
-  if(video.readyState === video.HAVE_CURRENT_DATA) {
+  if (video.readyState === video.HAVE_CURRENT_DATA) {
     const canvas = document.createElement("canvas");
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
@@ -810,7 +858,7 @@ function tickScanner() {
       inversionAttempts: "dontInvert",
     });
 
-    if(code && code.data) {
+    if (code && code.data) {
       handleScannedData(code.data);
       return;
     }
@@ -833,25 +881,29 @@ async function handleScannedData(compressedData) {
 
 function hideQrScanner() {
   document.getElementById("qrScanner").classList.add("hidden");
-  if(scannerStream) {
-    scannerStream.getTracks().forEach(track => track.stop());
+  if (scannerStream) {
+    scannerStream.getTracks().forEach((track) => track.stop());
     scannerStream = null;
   }
 
-  if(scannerAnimationId) {
+  if (scannerAnimationId) {
     cancelAnimationFrame(scannerAnimationId);
     scannerAnimationId = null;
   }
 }
 
-document.getElementById("scanRemoteQrBtn").addEventListener("click", startQrScanner);
-document.getElementById("closeScannerBtn").addEventListener("click", hideQrScanner);
-document.getElementById("fileSelectBtn").addEventListener("click", ()=> {
+document
+  .getElementById("scanRemoteQrBtn")
+  .addEventListener("click", startQrScanner);
+document
+  .getElementById("closeScannerBtn")
+  .addEventListener("click", hideQrScanner);
+document.getElementById("fileSelectBtn").addEventListener("click", () => {
   document.getElementById("fileInput").click();
 });
-document.getElementById("fileInput").addEventListener("change", (e)=>{
+document.getElementById("fileInput").addEventListener("change", (e) => {
   const selectedFile = e.target.files[0];
-  if(selectedFile) {
+  if (selectedFile) {
     transferEncryptedFile(selectedFile);
     e.target.value = "";
   }

@@ -246,3 +246,77 @@ export async function decryptBuffer(cipherTextHex, ivHex, cryptoKey) {
     ciphertext,
   );
 }
+
+export async function ratchetStep (currentChainKeyBuffer) {
+  if(!currentChainKeyBuffer || currentChainKeyBuffer.byteLength !== 32 ){
+    throw new Error("Invalid Chain Key Length - must be 32 bytes");
+  }
+
+  const baseKey = await window.crypto.subtle.importKey(
+    "raw",
+    currentChainKeyBuffer,
+    {
+      name: "HKDF"
+    },
+    false, 
+    ["deriveBits"]
+  );
+
+  const derivedBits = await window.crypto.subtle.deriveBits(
+    {
+      name: "HKDF",
+      hash: "SHA-256",
+      salt: new Uint8Array(32),
+      info: new TextEncoder().encode("JaVaultScript_Symmetric_Ratchet_Step")
+    },
+    baseKey,
+    512
+  );
+
+  const derivedArray = new Uint8Array(derivedBits);
+  const nextChainKeyBuffer = derivedArray.slice(0, 32).buffer;
+  const msgKeyBuffer = derivedArray.slice(32, 64).buffer;
+
+  const msgKey = await window.crypto.subtle.importKey(
+    "raw",
+    msgKeyBuffer,
+    {
+      name: "AES-GCM",
+      length: 256
+    },
+    false,
+    [
+      "encrypt",
+      "decrypt"
+    ]
+  );
+
+  return {
+    nextChainKeyBuffer, 
+    msgKey
+  }
+}
+
+export function miniSdp(sdpString) {
+  if(!sdpString) return "";
+
+  return sdpString.split("\r\n").filter(line => {
+    const l = line.trim();
+    if (l === "") return false;
+
+    if (l.startsWith("a=extmap:")) return false;
+    if (l.startsWith("a=rtcp-mux")) return false;
+    if (l.startsWith("a=rtcp:")) return false;
+    if (l.startsWith("a=msid:")) return false;
+    if (l.startsWith("a=ssrc:")) return false;
+    if (l.startsWith("a=b=AS:")) return false;
+    if (l.startsWith("a=b=TIAS:")) return false;
+
+    return true;
+  }).join("\n");
+}
+
+export function expandSdp(minifiedSdp) {
+  if(!minifiedSdp) return "";
+  return minifiedSdp.replace(/\n/g, "\r\n");
+}

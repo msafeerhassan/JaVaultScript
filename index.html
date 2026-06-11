@@ -38,6 +38,24 @@
     </div>
 
     <main id="mainApp" class="hidden">
+      <div id="callOverlay" class="callOverlay hidden">
+        <div class="videoCanvasContainer">
+            <video autoplay playsinline id="remoteVideo" class="remoteVideoCanvas"></video>
+            <video autoplay playsinline muted id="localVideo" class="localVideoCanvas"></video>
+
+            <div class="callStatusBadge">
+              <span class="pulseIcon"></span>
+              <span id="callDurationText">Secure P2P Video Chat</span>
+            </div>
+        </div>
+        <div class="callControls">
+          <button id="toggleAudioBtn" class="controlCircleBtn" title="Toggle Microphone">Mute Mic</button>
+          <button id="toggleVideoBtn" class="controlCircleBtn" title="Toggle Camera">Stop Video</button>
+          <button id="endCallBtn" class="controlCircleBtn" title="Terminate Call">End Call</button>
+        </div>
+      </div>
+
+      <button id="initiateCallBtn" class="hidden">Call Peer</button>
       <header>
         <div class="headerTitleContainer">
           <h1>JaVault Workspace</h1>
@@ -79,8 +97,14 @@
       </section>
 
       <div id="chatLog"></div>
+      <div id="replyContextBar">
+        <span>⬅️</span>
+        <span class="replyPreview" id="replyPreviewText"></span>
+        <button class="cancelReplyBtn" id="cancelReplyBtn" type="button">x</button>
+      </div>
       <form id="messageForm">
         <input type="file" class="hidden" id="fileInput" />
+        <button id="fileSelectBtn" title="Attach File">📁</button>
         <input
           type="text"
           id="messageInput"

@@ -17,10 +17,14 @@ import {
   decompressString,
   encryptBuffer,
   decryptBuffer,
+  ratchetStep,
+  miniSdp,
+  expandSdp
 } from "./cryptoUtils.js";
 
 let chatSession = {
-  key: null,
+  sendChainKey: null,
+  recvChainKey: null,
   history: [],
 };
 
@@ -37,8 +41,19 @@ let remoteTypingTimer = null;
 let scannerStream = null;
 let scannerAnimationId = null;
 const messageInputEl = document.getElementById("messageInput");
+const messageMap = new Map();
 
-const staticSalt = stringToBuffer("JaVaultScript_Application_Salt_Fixed_16B");
+function getOrCreateSalt() {
+  const stored = localStorage.getItem("javault_pbkdf2_salt");
+  if(stored) {
+    return hexToBuffer(stored);
+  }
+  const fresh = window.crypto.getRandomValues(new Uint8Array(32));
+  localStorage.setItem("javault_pbkdf2_salt", bufferToHex(fresh));
+  return fresh;
+}
+
+const staticSalt = getOrCreateSalt();
 
 const splashWall = document.getElementById("splashWall");
 const masterPhraseForm = document.getElementById("masterPhraseForm");
@@ -49,6 +64,18 @@ const messageForm = document.getElementById("messageForm");
 const lockBtn = document.getElementById("lockBtn");
 const statusRing = document.getElementById("statusRing");
 const statusText = document.getElementById("statusText");
+let localMediaStream = null;
+let isAudioMuted = false;
+let isVideoMuted = false;
+let mediaSenders = [];
+
+const callOverlay = document.getElementById("callOverlay");
+const localVideoEl = document.getElementById("localVideo");
+const remoteVideoEl = document.getElementById("remoteVideo")
+const initiateCallBtn = document.getElementById("initiateCallBtn");
+const toggleAudioBtn = document.getElementById("toggleAudioBtn");
+const toggleVideoBtn = document.getElementById("toggleVideoBtn");
+const endCallBtn = document.getElementById("endCallBtn");
 
 function renderMessage(
   text,
@@ -56,27 +83,61 @@ function renderMessage(
   timeStr = "",
   isImage = false,
   imageDataUrl = "",
+  msgId = null,
+  replyTo = null,
 ) {
+  if(!msgId) msgId = generateMsgId();
+
   const rowEl = document.createElement("div");
   rowEl.classList.add("msgRow", direction);
+  rowEl.dataset.msgId = msgId;
+  const actionsEl = document.createElement("div");
+  actionsEl.className = "msgActions";
+  const reactBtn = document.createElement("button");
+  reactBtn.className = "msgActionBtn";
+  reactBtn.textContent = "😊";
+  reactBtn.title = "React";
+  reactBtn.addEventListener("click", (e)=>{
+    e.stopPropagation();
+    showEmojiPicker(msgId, rowEl, direction);
+  });
+
+  const replyBtn = document.createElement("button");
+  replyBtn.className = "msgActionBtn";
+  replyBtn.textContent = "⬅️";
+  replyBtn.title = "Reply";
+  replyBtn.addEventListener("click", ()=>{
+    setReplyContext(msgId, text);
+  })
+
+  actionsEl.appendChild(reactBtn);
+  actionsEl.appendChild(replyBtn);
+  rowEl.appendChild(actionsEl);
 
   const bubbleEl = document.createElement("div");
   bubbleEl.classList.add("msgBubble");
 
+  if(replyTo && replyTo.text) {
+    const quoteEl = document.createElement("div");
+    quoteEl.className = "replyQuote";
+    quoteEl.textContent = replyTo.text.length > 80 ? replyTo.text.slice(0, 80) + "..." : replyTo.text;
+    bubbleEl.appendChild(quoteEl);
+  }
+
   if (isImage && imageDataUrl) {
-    const imageLink = document.createElement("div");
+    const imageLink = document.createElement("a");
     imageLink.href = imageDataUrl;
     imageLink.download = text || "encryptedImage.png";
-
     const imageEl = document.createElement("img");
     imageEl.src = imageDataUrl;
     imageEl.alt = text || "Secure Image File";
     imageEl.className = "chatImage";
-
     imageLink.appendChild(imageEl);
     bubbleEl.appendChild(imageLink);
   } else {
-    bubbleEl.textContent = text;
+    const textNode = document.createElement("span");
+    textNode.textContent = text
+    bubbleEl.appendChild(textNode);
   }
   if (!timeStr) {
     const now = new Date();
@@ -91,12 +152,126 @@ function renderMessage(
   metaEl.textContent = timeStr;
   bubbleEl.appendChild(metaEl);
 
+  const reactionBar = document.createElement("div");
+  reactionBar.className = "reactionBar";
+  bubbleEl.appendChild(reactionBar);
+
   rowEl.appendChild(bubbleEl);
   chatLog.appendChild(rowEl);
   chatLog.scrollTop = chatLog.scrollHeight;
 
-  return rowEl;
+  messageMap.set(msgId,
+    {
+      rowEl,
+      reactionBar,
+      reactionsData: new Map(),
+      text,
+    }
+  );
+  return { rowEl, msgId };
 }
+
+const EmojiList = ["👍", "❤️", "😂", "😮", "😢", "🔥"];
+let activePickerEl = null;
+
+function showEmojiPicker(msgId, rowEl, direction) {
+  closeEmojiPicker();
+  const picker = document.createElement("div");
+  picker.className = "emojiPicker";
+
+  picker.style.bottom = "calc(100% + 6px)";
+  picker.style.position = "absolute";
+  if (direction === "outgoing") {
+    picker.style.right = "0";
+  }
+  else {
+    picker.style.left = "0";
+  }
+
+  EmojiList.forEach((emoji) => {
+    const btn = document.createElement("button");
+    btn.className = "emojiPickerBtn";
+    btn.textContent = emoji;
+    btn.addEventListener("click", () => {
+      sendReaction(msgId, emoji);
+      closeEmojiPicker();
+    });
+    picker.appendChild(btn);
+  });
+  rowEl.style.position = "relative";
+  rowEl.appendChild(picker);
+  activePickerEl = {el: picker, rowEl};
+
+  setTimeout(() => {
+    document.addEventListener("click", closeEmojiPicker, {once:true});
+  }, 0);
+}
+
+function closeEmojiPicker() {
+  if(activePickerEl) {
+    activePickerEl.el.remove();
+    activePickerEl = null;
+  }
+}
+
+async function sendReaction(targetMsgId, emoji) {
+  if(!dataChannel || dataChannel.readyState !== "open" || !chatSession.key) return;
+
+  applyReaction(targetMsgId, emoji, "local");
+  const payload = {
+    type: "REACTION",
+    targetMsgId,
+    emoji,
+    timestamp: Date.now(),
+  };
+
+  try {
+    const encrypted = await encryptText(JSON.stringify(payload), chatSession.key);
+    dataChannel.send(JSON.stringify({
+      type: "REACTION",
+      iv: encrypted.iv,
+      ciphertext: encrypted.ciphertext,
+    }));
+  } catch (error) {
+    console.error("Failed to send reaction: ", error);
+  }
+}
+
+function applyReaction(targetMsgId, emoji, source) {
+  const entry = messageMap.get(targetMsgId);
+  if(!entry) return;
+  if(!entry.reactionsData.has(emoji)) {
+    entry.reactionsData.set(emoji, new Set());
+  }
+  entry.reactionsData.get(emoji).add(source);
+  entry.reactionBar.innerHTML = "";
+  for (const [e, sources] of entry.reactionsData.entries()) {
+    const chip = document.createElement("div");
+    chip.className = "reactionChip" + (sources.has("local") ? " mine" : "");
+    chip.innerHTML = `${e} <span class = "reactionCount">${sources.size}</span>`;
+    entry.reactionBar.appendChild(chip);
+  }
+}
+
+let replyContext = null;
+const replyContextBar = document.getElementById("replyContextBar");
+const replyPreviewText = document.getElementById("replyPreviewText");
+const cancelReplyBtn = document.getElementById("cancelReplyBtn");
+
+function setReplyContext(msgId, text) {
+  replyContext = {msgId, text};
+  replyPreviewText.textContent = text.length > 80 ? text.slice(0, 80) + "..." : text;
+  replyContextBar.classList.add("active");
+  messageInputEl.focus();
+}
+
+function clearReplyContext() {
+  replyContext = null;
+  replyContextBar.classList.remove("active");
+  replyPreviewText.textContent = "";
+}
+
+cancelReplyBtn.addEventListener("click", clearReplyContext);
 
 function updateStatusUI(state) {
   statusRing.className = "statusRing";
@@ -142,11 +317,17 @@ messageForm.addEventListener("submit", async (event) => {
   const plainText = messageInputEl.value.trim();
   if (!plainText) return;
 
+  const msgId = generateMsgId();
+  const currentReply = replyContext ? {...replyContext} : null;
+  clearReplyContext();
+
   try {
     const historyPayload = {
+      msgId,
       text: plainText,
       direction: "outgoing",
       timestamp: Date.now(),
+      replyTo: currentReply,
     };
     const encryptedPkg = await encryptText(
       JSON.stringify(historyPayload),
@@ -161,7 +342,7 @@ messageForm.addEventListener("submit", async (event) => {
     localStorage.setItem("javault_history", JSON.stringify(savedHistory));
 
     chatSession.history.push(plainText);
-    renderMessage(plainText, "outgoing");
+    renderMessage(plainText, "outgoing", "", false, msgId, currentReply);
 
     if (dataChannel && dataChannel.readyState === "open") {
       if (!chatSession.key) {
@@ -169,21 +350,28 @@ messageForm.addEventListener("submit", async (event) => {
         return;
       }
 
-      const encryptedWirePkg = await encryptText(plainText, chatSession.key);
+      // const encryptedWirePkg = await encryptText(plainText, chatSession.key);
 
       const wirePayLoad = {
         type: "TEXT_MESSAGE",
-        iv: encryptedWirePkg.iv,
-        ciphertext: encryptedWirePkg.ciphertext,
+        msgId,
+        plainText,
+        replyTo: currentReply,
         timestamp: Date.now(),
         sender: "peer_node",
       };
-      dataChannel.send(JSON.stringify(wirePayLoad));
+      const encrypted = await encryptText(JSON.stringify(wirePayLoad), chatSession.key);
+      dataChannel.send(JSON.stringify({
+        type: "TEXT_MESSAGE",
+        iv: encrypted.iv,
+        ciphertext: encrypted.ciphertext,
+        timestamp: Date.now(),
+      }));
     } else {
       console.warn("Data Channel isn't open");
     }
 
-    messageInput.value = "";
+    messageInputEl.value = "";
   } catch (e) {
     console.error("Encryption Crash: ", e);
   }
@@ -191,6 +379,7 @@ messageForm.addEventListener("submit", async (event) => {
 
 async function loadAndDecryptHistory() {
   chatLog.innerHTML = "";
+  messageMap.clear();
   const savedHistory = JSON.parse(
     localStorage.getItem("javault_history") || "[]",
   );
@@ -221,6 +410,8 @@ async function loadAndDecryptHistory() {
         displayTime,
         record.isImage || false,
         record.fileData || "",
+        record.msgId || null,
+        record.replyTo || null,
       );
     } catch (error) {
       console.error("Decryption Failed", error);
@@ -273,7 +464,7 @@ function initializePeerConnection() {
       localSdpTextArea.value = btoa(
         JSON.stringify(peerConnection.localDescription),
       );
-      updateLocalQrCode(localSdpTextArea.value);
+      updateLocalQrCode(peerConnection.localDescription);
     }
   };
 
@@ -283,11 +474,10 @@ function initializePeerConnection() {
     );
     if (peerConnection.connectionState === "connected") {
       updateStatusUI("connected");
-    } else if (
-      peerConnection.connectionState === "failed" ||
-      peerConnection.connectionState === "disconnected"
-    ) {
+      initiateCallBtn.classList.remove("hidden");
+    } else {
       updateStatusUI("idle");
+      initiateCallBtn.classList.add("hidden");
     }
   };
 
@@ -302,6 +492,14 @@ function initializePeerConnection() {
     dataChannel = event.channel;
     setupDataChannelListeners(dataChannel);
   };
+
+  peerConnection.ontrack = (event) => {
+    console.log("Hardware Media Track Intercepted!")
+    if(event.streams && event.streams[0]) {
+      remoteVideoEl.srcObject = event.streams[0];
+      callOverlay.classList.remove("hidden");
+    }
+  }
 }
 
 function setupDataChannelListeners(channel) {
@@ -330,18 +528,13 @@ async function generateLocalConnectionOffer() {
     initializePeerConnection();
   }
 
+  if(!dataChannel || data.readyState === "closed") {
   dataChannel = peerConnection.createDataChannel("chatChannel");
   setupDataChannelListeners(dataChannel);
-
+  }
   try {
     const offer = await peerConnection.createOffer();
     await peerConnection.setLocalDescription(offer);
-
-    if (peerConnection.iceGatheringState === "complete") {
-      localSdpTextArea.value = btoa(
-        JSON.stringify(peerConnection.localDescription),
-      );
-    }
   } catch (error) {
     console.error(
       "Failed to construct local connection configuration profile :(",
@@ -374,12 +567,6 @@ async function acceptRemotePeerConnection() {
       console.log("Connection Offer Detected!");
       const answer = await peerConnection.createAnswer();
       await peerConnection.setLocalDescription(answer);
-
-      if (peerConnection.iceGatheringState === "complete") {
-        localSdpTextArea.value = btoa(
-          JSON.stringify(peerConnection.localDescription),
-        );
-      }
     } else if (remoteDescriptionObject.type === "answer") {
       console.log("Answer Recieved and Processed!");
     }
@@ -414,14 +601,18 @@ async function handleIncomingMsg(rawWireDate) {
   try {
     const parsedFrame = JSON.parse(rawWireDate);
 
-    if (
-      parsedFrame &&
-      (parsedFrame.status === "typing" || parsedFrame.status === "idle")
-    ) {
-      if (parsedFrame.status === "typing") {
-        showTypingIndicator();
-      } else {
-        hideTypingIndicator();
+    if (parsedFrame && parsedFrame.type === "TYPING_SIGNAL" && chatSession.key) {
+      try {
+        const decrypted = await decryptText(parsedFrame.ciphertext, parsedFrame.iv, chatSession.key);
+        const signal = JSON.parse(decrypted);
+        if(signal.status === "typing"){
+          showTypingIndicator();
+        }
+        else {
+          hideTypingIndicator();
+        }
+      } catch (error) {
+        console.warn("Failed to decrypt typing signal: ", error)
       }
       return;
     }
@@ -487,22 +678,27 @@ async function handleIncomingMsg(rawWireDate) {
       if (!chatSession.key) {
         renderMessage(
           "Error: Cannot Decrypt Message. Local Session Locked",
-          "incoming",
+          "incoming"
         );
         return;
       }
 
-      const decryptedText = await decryptText(
+      const decryptedJSON = await decryptText(
         parsedFrame.ciphertext,
         parsedFrame.iv,
         chatSession.key,
       );
 
+      const wirePayLoad = JSON.parse(decryptedJSON);
+      const {msgId, plainText, replyTo, timestamp} = wirePayLoad;
+
       try {
         const historyPayload = {
-          text: decryptedText,
+          msgId,
+          text: plainText,
           direction: "incoming",
-          timestamp: parsedFrame.timestamp || Date.now(),
+          timestamp: timestamp || Date.now(),
+          replyTo: replyTo || null,
         };
         const encryptedPkg = await encryptText(
           JSON.stringify(historyPayload),
@@ -525,7 +721,23 @@ async function handleIncomingMsg(rawWireDate) {
           minute: "2-digit",
         });
       }
-      renderMessage(decryptedText, "incoming", displayTime);
+      renderMessage(plainText, "incoming", displayTime, false, "", msgId, replyTo || null);
+    }
+
+    if (parsedFrame && parsedFrame.type === "REACTION") {
+      if(!chatSession.key) return;
+      try {
+        const decryptedJSON = await decryptText(
+          parsedFrame.ciphertext,
+          parsedFrame.iv,
+          chatSession.key,
+        );
+        const {targetMsgId, emoji} = JSON.parse(decryptedJSON);
+        applyReaction(targetMsgId, emoji, "remote");
+      } catch (error) {
+        console.error("Failed to decrypt reaction: ", error);
+      }
+      return;
     }
 
     if (parsedFrame && parsedFrame.type === "FILE_START") {
@@ -568,7 +780,16 @@ async function handleIncomingMsg(rawWireDate) {
       const fileContext = incomingFileMap.get(parsedFrame.fileId);
       if (!fileContext) return;
 
-      const combinedBlob = new Blob(fileContext.chunks, {
+      if(fileContext.receivedCount !== fileContext.totalChunks) {
+        console.error(`${fileContext.name} incomplete!`);
+        renderMessage(`File Transfer Incomplete: ${fileContext.name}`, "incoming", "");
+        incomingFileMap.delete(parsedFrame.fileId);
+        return;
+      }
+
+      const orderedChunks = fileContext.chunks.filter(Boolean);
+
+      const combinedBlob = new Blob(orderedChunks, {
         type: fileContext.mimeType,
       });
 
@@ -618,6 +839,11 @@ async function handleIncomingMsg(rawWireDate) {
         downloadLink.style.color = "#34d399";
         downloadLink.style.fontWeight = "bold";
         downloadLink.style.textDecoration = "underline";
+
+        downloadLink.addEventListener("click", () => {
+            setTimeout(() => URL.revokeObjectURL(downloadUrl), 10000)
+        })
+
         bubbleEl.appendChild(downloadLink);
         rowEl.appendChild(bubbleEl);
         chatLog.appendChild(rowEl);
@@ -625,6 +851,53 @@ async function handleIncomingMsg(rawWireDate) {
       }
 
       incomingFileMap.delete(parsedFrame.fileId);
+      return;
+    }
+
+    if(parsedFrame && parsedFrame.type === "CALL_SIGNAL") {
+      if(!chatSession.key) return;
+
+      const decryptedSignalJson = await decryptText(parsedFrame.ciphertext, parsedFrame.iv, chatSession.key);
+      const signalData = JSON.parse(decryptedSignalJson);
+
+      if(signalData.subtype === "MEDIA_OFFER") {
+        console.log("Processing inbound call request!");
+        const acceptCall = confirm("Inbound Video Call Request Recieved! Accept?");
+        if(!acceptCall) {
+          sendCallTerminationMsg();
+          return;
+        }
+
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(signalData.sdp));
+        localMediaStream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: true
+        });
+        localVideoEl.srcObject = localMediaStream;
+
+        localMediaStream.getTracks().forEach(track => {
+          peerConnection.addTrack(track, localMediaStream);
+        });
+
+        const ansDesc = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(ansDesc);
+
+        await transmitCallSignal({
+          subtype: "MEDIA_ANSWER",
+          sdp: peerConnection.localDescription
+        });
+
+        callOverlay.classList.remove("hidden");
+      }
+
+      else if(signalData.subtype === "MEDIA_ANSWER") {
+        console.log("Remote Peer Accepted Calling Session");
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(signalData.sdp));
+      }
+      else if (signalData.subtype === "MEDIA_HANGUP") {
+        console.log("Remote Media Session Terminated");
+        shutDownActiveMediaTracks();
+      }
       return;
     }
   } catch (e) {
@@ -780,31 +1053,43 @@ function hideTypingIndicator() {
 }
 
 messageInputEl.addEventListener("input", () => {
-  if (dataChannel && dataChannel.readyState === "open") {
+  if (dataChannel && dataChannel.readyState === "open" && chatSession.key) {
     if (!isLocallyTyping) {
       isLocallyTyping = true;
-      dataChannel.send(
-        JSON.stringify({
-          status: "typing",
-        }),
-      );
+      try {
+        const encrypted = await encryptText(
+          JSON.stringify({status: "typing"}),
+          chatSession.key
+        );
+        dataChannel.send(JSON.stringify({type: "TYPING_SIGNAL", iv: encrypted.iv, ciphertext: encrypted.ciphertext}));
+
+      } catch (error) {
+        console.warn("Failed sending typing signal: ", error);
+      }
     }
 
     clearTimeout(localTypingTimeout);
-    localTypingTimeout = setTimeout(() => {
+    localTypingTimeout = setTimeout(async () => {
       isLocallyTyping = false;
-      dataChannel.send(
-        JSON.stringify({
-          status: "idle",
-        }),
-      );
+      try {
+        const encrypted = await encryptText(
+          JSON.stringify({status: "idle"}),
+          chatSession.key
+        );
+        dataChannel.send(JSON.stringify({type: "TYPING_SIGNAL", iv: encrypted.iv, ciphertext: encrypted.ciphertext}));
+      } catch (error) {
+        console.warn("Failed to send idle signal", e);}
     }, 3000);
   }
 });
 
-async function updateLocalQrCode(rawSdp) {
+async function updateLocalQrCode(localDesc) {
   try {
-    const compressedPayLoad = await compressString(rawSdp);
+
+    if(!localDesc || !localDesc.sdp) return ;
+    const minified = miniSdp(localDesc.sdp);
+    const payLoadToCompress = `${localDesc.type}|${minified}`;
+    const compressedPayLoad = await compressString(payLoadToCompress);
 
     new QRious({
       element: document.getElementById("localQrCanvas"),
@@ -868,8 +1153,20 @@ function tickScanner() {
 
 async function handleScannedData(compressedData) {
   try {
-    const structuralSdp = await decompressString(compressedData);
-    remoteSdpTextArea.value = structuralSdp;
+
+    const decompressed = await decompressString(compressedData);
+    const separatorIndex = decompressed.indexOf('|');
+    if (separatorIndex === -1) throw new Error("Invalid scanned QR Layout");
+
+    const type = decompressed.substring(0, separatorIndex);
+    const minifiedSdp = decompressed.substring(separatorIndex + 1);
+    const structuralSdp = expandSdp(minifiedSdp);
+    const remoteDescriptionObject = {
+      type: type,
+      sdp: structuralSdp
+    };
+
+    remoteSdpTextArea.value = btoa(JSON.stringify(remoteDescriptionObject));
     hideQrScanner();
     acceptRemoteBtn.click();
   } catch (error) {
@@ -890,6 +1187,113 @@ function hideQrScanner() {
     cancelAnimationFrame(scannerAnimationId);
     scannerAnimationId = null;
   }
+}
+
+async function transmitCallSignal(payLoadData) {
+  if (dataChannel && dataChannel.readyState === "open" && chatSession.key) {
+    const encryptedWirePkg = await encryptText(JSON.stringify(payLoadData), chatSession.key);
+    const wirePayLoad = {
+      type: "CALL_SIGNAL",
+      iv: encryptedWirePkg.iv,
+      ciphertext: encryptedWirePkg.ciphertext,
+      timestamp: Date.now()
+    };
+    dataChannel.send(JSON.stringify(wirePayLoad));
+  }
+}
+
+async function startPeerVoiceVideoCall() {
+  try {
+    console.log("Accessing media hardware ");
+    localMediaStream = await navigator.mediaDevices.getUserMedia({
+      audio:true,
+      video:true
+    });
+    mediaSenders = [];
+    localVideoEl.srcObject = localMediaStream;
+    callOverlay.classList.remove("hidden");
+
+    localMediaStream.getTracks().forEach(track => {
+      const sender = peerConnection.addTrack(track, localMediaStream);
+      mediaSenders.push(sender);
+    });
+
+    const callOffer = await peerConnection.createOffer();
+    await peerConnection.setLocalDescription(callOffer);
+
+    await transmitCallSignal({
+      subtype: "MEDIA_OFFER",
+      sdp: peerConnection.localDescription
+    });
+  } catch (error) {
+    console.error("Cannot Access Camera/Microphone: ", error);
+    shutDownActiveMediaTracks();
+  }
+}
+
+function shutDownActiveMediaTracks() {
+  if(localMediaStream) {
+    localMediaStream.getTracks().forEach(track => track.stop());
+    localMediaStream = null;
+  }
+  if(peerConnection) {
+    mediaSenders.forEach(sender => {
+      try {
+        peerConnection.removeTrack(sender);
+      } catch (error) {
+        console.warn(error)
+      }
+    });
+  }
+  mediaSenders = [];
+  localVideoEl.srcObject = null;
+  remoteVideoEl.srcObject = null;
+  if (callOverlay) callOverlay.classList.add("hidden");
+
+  isAudioMuted = false;
+  isVideoMuted = false;
+  if (toggleAudioBtn) {
+  toggleAudioBtn.textContent = "Mute Mic";
+  toggleAudioBtn.classList.remove("hardwareMuted");
+  }
+  if (toggleVideoBtn) {
+    toggleVideoBtn.textContent = "Stop Video";
+    toggleVideoBtn.classList.remove("hardwareMuted");
+  }
+}
+
+function sendCallTerminationMsg() {
+  transmitCallSignal({
+    subtype: "MEDIA_HANGUP"
+  });
+  shutDownActiveMediaTracks();
+}
+
+if (initiateCallBtn) initiateCallBtn.addEventListener("click", startPeerVoiceVideoCall);
+if (endCallBtn) endCallBtn.addEventListener("click", sendCallTerminationMsg);
+
+if (toggleAudioBtn) {
+
+toggleAudioBtn.addEventListener("click", () => {
+  if(localMediaStream) {
+    isAudioMuted = !isAudioMuted
+    localMediaStream.getAudioTracks().forEach(track => track.enabled = !isAudioMuted);
+    toggleAudioBtn.textContent = isAudioMuted ? "Unmute Mic" : "Mute Mic";
+    toggleAudioBtn.classList.toggle("hardwareMuted", isAudioMuted);
+  }
+});
+}
+
+if (toggleVideoBtn) {
+
+toggleVideoBtn.addEventListener("click", () => {
+  if(localMediaStream) {
+    isVideoMuted = !isVideoMuted;
+    localMediaStream.getVideoTracks().forEach(track => track.enabled = !isVideoMuted);
+    toggleVideoBtn.textContent = isVideoMuted ? "Start Video" : "Stop Video";
+    toggleVideoBtn.classList.toggle("hardwareMuted", isVideoMuted);
+  }
+});
 }
 
 document

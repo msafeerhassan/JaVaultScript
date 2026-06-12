@@ -412,7 +412,8 @@ messageForm.addEventListener("submit", async (event) => {
         console.warn("Session Encryption Key not registered yet.");
         return;
       }
-
+      const {nextChainKeyBuffer, msgKey} = await ratchetStep(chatSession.sendChainKey);
+      chatSession.sendChainKey = nextChainKeyBuffer;
       // const encryptedWirePkg = await encryptText(plainText, chatSession.key);
 
       const wirePayLoad = {
@@ -423,7 +424,7 @@ messageForm.addEventListener("submit", async (event) => {
         timestamp: Date.now(),
         sender: "peer_node",
       };
-      const encrypted = await encryptText(JSON.stringify(wirePayLoad), chatSession.key);
+      const encrypted = await encryptText(JSON.stringify(wirePayLoad), msgKey);
       dataChannel.send(JSON.stringify({
         type: "TEXT_MESSAGE",
         iv: encrypted.iv,
@@ -485,8 +486,10 @@ async function loadAndDecryptHistory() {
 lockBtn.addEventListener("click", () => {
   masterStorageKey = null;
   chatSession.key = null;
+  chatSession.sendChainKey = null;
+  chatSession.recvChainKey = null;
   chatSession.history = [];
-  chatLog.innerHTML = "";
+  chatLog.innerHTML = ""
 
   if (peerConnection) {
     peerConnection.close();
@@ -676,7 +679,6 @@ async function handleIncomingMsg(rawWireDate) {
       console.log("Intercepted public key");
       remotePeerPublicKeyBase64 = parsedFrame.publicKeyStr;
       console.log("Extracted remote peer Base64 public key");
-      // return;
       const remotePublicKeyBuffer = base64ToBuffer(remotePeerPublicKeyBase64);
       remotePeerPublicKey = await importPublicKeySpki(remotePublicKeyBuffer);
 
@@ -692,6 +694,10 @@ async function handleIncomingMsg(rawWireDate) {
 
         const freshSessionKey = await generateSharedSessionKey();
 
+        const rawKeyBits = await window.crypto.subtle.exportKey("raw", freshSessionKey);
+        chatSession.sendChainKey = rawKeyBits;
+        chatSession.recvChainKey = rawKeyBits.slice(0);
+
         const wrappedKeyBuffer = await wrapSymmetricKey(
           freshSessionKey,
           remotePeerPublicKey,
@@ -704,7 +710,7 @@ async function handleIncomingMsg(rawWireDate) {
         };
 
         dataChannel.send(JSON.stringify(wirePayload));
-        chatSession.key = freshSessionKey;
+        // chatSession.key = freshSessionKey;
         console.log("Session key gen, wrap and transmitted");
       }
       return;
@@ -723,7 +729,11 @@ async function handleIncomingMsg(rawWireDate) {
         wrappedBuffer,
         localEphemeralKeyPair.privateKey,
       );
-      chatSession.key = unwrappedSessionKey;
+
+      const rawKeyBits = await window.crypto.subtle.exportKey("raw", unwrappedSessionKey);
+      chatSession.sendChainKey = rawKeyBits;
+      chatSession.recvChainKey = rawKeyBits.slice(0);
+
       console.log("Symetric session key decrypted and extracted");
       return;
     }
@@ -738,10 +748,13 @@ async function handleIncomingMsg(rawWireDate) {
         return;
       }
 
+      const {nextChainKeyBuffer, msgKey} = await ratchetStep(chatSession.recvChainKey);
+      chatSession.recvChainKey = nextChainKeyBuffer;
+
       const decryptedJSON = await decryptText(
         parsedFrame.ciphertext,
         parsedFrame.iv,
-        chatSession.key,
+        msgKey,
       );
 
       const wirePayLoad = JSON.parse(decryptedJSON);
@@ -855,13 +868,17 @@ async function handleIncomingMsg(rawWireDate) {
 
     if (parsedFrame && parsedFrame.type === "FILE_CHUNK") {
       const fileContext = incomingFileMap.get(parsedFrame.fileId);
-      if (!fileContext || !chatSession.key) return;
+      if (!fileContext || !chatSession.recvChainKey) return;
 
       try {
+
+        const {nextChainKeyBuffer, msgKey} = await ratchetStep(chatSession.recvChainKey);
+        chatSession.recvChainKey = nextChainKeyBuffer;
+
         const decryptedBuffer = await decryptBuffer(
           parsedFrame.ciphertext,
           parsedFrame.iv,
-          chatSession.key,
+          msgKey,
         );
 
         fileContext.chunks[parsedFrame.chunkIndex] = decryptedBuffer;
@@ -1048,7 +1065,13 @@ async function transferEncryptedFile(file) {
   reader.onload = async (e) => {
     const rawBuffer = e.target.result;
     try {
-      const encryptedPkg = await encryptBuffer(rawBuffer, chatSession.key);
+
+      if(!chatSession.sendChainKey) throw new Error("Ratchet Uninitalized");
+
+      const {nextChainKeyBuffer, msgKey} = await ratchetStep(chatSession.sendChainKey);
+      chatSession.sendChainKey = nextChainKeyBuffer;
+
+      const encryptedPkg = await encryptBuffer(rawBuffer, msgKey);
       dataChannel.send(
         JSON.stringify({
           type: "FILE_CHUNK",

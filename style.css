@@ -252,6 +252,8 @@ header h1 {
 
 .msgRow {
   position:relative;
+  display: flex;
+  align-items: center;
 }
 
 .msgRow.outgoing {
@@ -263,6 +265,7 @@ header h1 {
 }
 
 .msgBubble {
+  position: relative;
   max-width: 70%;
   padding: 0.6rem 0.9rem;
   border-radius: 12px;
@@ -554,9 +557,7 @@ header h1 {
 
 .msgActions {
   display: none;
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
+  position: relative;
   background: #1e293b;
   border: 1px solid #334155;
   border-radius: 20px;
@@ -565,6 +566,7 @@ header h1 {
   align-items: center;
   z-index: 10;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .msgRow:hover .msgActions {
@@ -572,11 +574,13 @@ header h1 {
 }
 
 .msgRow.outgoing .msgActions {
-  left: -110px;
+  order: -1;
+  margin-right: 6px;
 }
 
 .msgRow.incoming .msgActions {
-  right: -110px;
+  order: 1;
+  margin-left: 6px;
 }
 
 .msgActionBtn {
@@ -679,7 +683,7 @@ header h1 {
   color: #94a3b8;
 }
 
-#replyContextBar .active {
+#replyContextBar.active {
   display: flex;
 }
 

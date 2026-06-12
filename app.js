@@ -43,6 +43,10 @@ let scannerAnimationId = null;
 const messageInputEl = document.getElementById("messageInput");
 const messageMap = new Map();
 
+function generateMsgId() {
+  return crypto.randomUUID();
+}
+
 function getOrCreateSalt() {
   const stored = localStorage.getItem("javault_pbkdf2_salt");
   if(stored) {
@@ -179,13 +183,25 @@ function showEmojiPicker(msgId, rowEl, direction) {
   const picker = document.createElement("div");
   picker.className = "emojiPicker";
 
-  picker.style.bottom = "calc(100% + 6px)";
+  const bubbleEl = rowEl.querySelector(".msgBubble");
+
   picker.style.position = "absolute";
-  if (direction === "outgoing") {
+  if(direction === "outgoing") {
     picker.style.right = "0";
   }
   else {
     picker.style.left = "0";
+  }
+
+  const bubbleRect = bubbleEl.getBoundingClientRect();
+  const chatLogRect = chatLog.getBoundingClientRect();
+  const spaceAbove = bubbleRect.top - chatLogRect.top;
+
+  if(spaceAbove < 60) {
+    picker.style.top = "calc(100% + 6px)";
+  }
+  else {
+    picker.style.bottom = "calc(100% + 6px)";
   }
 
   EmojiList.forEach((emoji) => {
@@ -198,9 +214,11 @@ function showEmojiPicker(msgId, rowEl, direction) {
     });
     picker.appendChild(btn);
   });
-  rowEl.style.position = "relative";
-  rowEl.appendChild(picker);
-  activePickerEl = {el: picker, rowEl};
+  bubbleEl.appendChild(picker);
+  activePickerEl = {
+    el: picker,
+    rowEl
+  };
 
   setTimeout(() => {
     document.addEventListener("click", closeEmojiPicker, {once:true});
@@ -215,9 +233,9 @@ function closeEmojiPicker() {
 }
 
 async function sendReaction(targetMsgId, emoji) {
+  applyReaction(targetMsgId, emoji, "local");
   if(!dataChannel || dataChannel.readyState !== "open" || !chatSession.key) return;
 
-  applyReaction(targetMsgId, emoji, "local");
   const payload = {
     type: "REACTION",
     targetMsgId,
@@ -342,7 +360,7 @@ messageForm.addEventListener("submit", async (event) => {
     localStorage.setItem("javault_history", JSON.stringify(savedHistory));
 
     chatSession.history.push(plainText);
-    renderMessage(plainText, "outgoing", "", false, msgId, currentReply);
+    renderMessage(plainText, "outgoing", "", false, "", msgId, currentReply);
 
     if (dataChannel && dataChannel.readyState === "open") {
       if (!chatSession.key) {
@@ -528,7 +546,7 @@ async function generateLocalConnectionOffer() {
     initializePeerConnection();
   }
 
-  if(!dataChannel || data.readyState === "closed") {
+  if(!dataChannel || dataChannel.readyState === "closed") {
   dataChannel = peerConnection.createDataChannel("chatChannel");
   setupDataChannelListeners(dataChannel);
   }
@@ -828,10 +846,16 @@ async function handleIncomingMsg(rawWireDate) {
         base64Reader.readAsDataURL(combinedBlob);
       } else {
         const downloadUrl = URL.createObjectURL(combinedBlob);
-        const rowEl = document.createElement("div");
-        rowEl.className = "msgRow incoming";
-        const bubbleEl = document.createElement("div");
-        bubbleEl.className = "msgBubble";
+        const { rowEl: fileRowEl } = renderMessage(
+          `Download File: ${fileContext.name}`,
+          "incoming",
+          "",
+        );
+
+        const bubbleEl = fileRowEl.querySelector(".msgBubble");
+        const textSpan = bubbleEl.querySelector("span");
+        if(textSpan) textSpan.remove();
+
         const downloadLink = document.createElement("a");
         downloadLink.href = downloadUrl;
         downloadLink.download = fileContext.name;
@@ -842,12 +866,8 @@ async function handleIncomingMsg(rawWireDate) {
 
         downloadLink.addEventListener("click", () => {
             setTimeout(() => URL.revokeObjectURL(downloadUrl), 10000)
-        })
-
-        bubbleEl.appendChild(downloadLink);
-        rowEl.appendChild(bubbleEl);
-        chatLog.appendChild(rowEl);
-        chatLog.scrollTop = chatLog.scrollHeight;
+        });
+        bubbleEl.insertBefore(downloadLink, bubbleEl.querySelector(".msgMeta"));
       }
 
       incomingFileMap.delete(parsedFrame.fileId);
@@ -931,11 +951,12 @@ async function transferEncryptedFile(file) {
     }),
   );
 
-  const sendingStatusEl = renderMessage(
+  const sendingStatus = renderMessage(
     `Sending File: ${file.name}`,
     "outgoing",
     "",
-  );
+  )
+  const sendingStatusEl = sendingStatus.rowEl;
 
   const reader = new FileReader();
   let offset = 0;
@@ -1052,7 +1073,7 @@ function hideTypingIndicator() {
   }
 }
 
-messageInputEl.addEventListener("input", () => {
+messageInputEl.addEventListener("input", async () => {
   if (dataChannel && dataChannel.readyState === "open" && chatSession.key) {
     if (!isLocallyTyping) {
       isLocallyTyping = true;
@@ -1078,7 +1099,7 @@ messageInputEl.addEventListener("input", () => {
         );
         dataChannel.send(JSON.stringify({type: "TYPING_SIGNAL", iv: encrypted.iv, ciphertext: encrypted.ciphertext}));
       } catch (error) {
-        console.warn("Failed to send idle signal", e);}
+        console.warn("Failed to send idle signal", error);}
     }, 3000);
   }
 });

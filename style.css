@@ -707,3 +707,39 @@ header h1 {
 #replyContextBar .cancelReplyBtn:hover {
   color: #f8fafc;
 }
+
+.msgTicks {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  font-size: 0.75rem;
+  vertical-align: middle;
+}
+
+/* .msgTicks .tick {
+  margin-left: 5px;
+  font-size: 0.8rem;
+  color: rgba(248, 250, 252, 0.6) o !important;
+  transition: color 0.2s ease;
+}
+
+.msgTicks .tick.delivered {
+  color: rgba(248, 250, 252, 0.9) !important;
+}
+
+.msgTicks .tick.read {
+  color: #34d399 !important;
+} */
+
+.tick {
+  color: #9ca3af;
+  margin-left: 4px;
+}
+
+.tick.delivered {
+  color: #ffffff !important;
+}
+
+.tick.read {
+  color: #f59e0b !important;
+}

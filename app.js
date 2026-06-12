@@ -30,7 +30,6 @@ let chatSession = {
 
 let incomingFileMap = new Map();
 const CHUNK_SIZE = 16384;
-
 let localEphemeralKeyPair = null;
 let remotePeerPublicKeyBase64 = null;
 let remotePeerPublicKey = null;
@@ -42,6 +41,39 @@ let scannerStream = null;
 let scannerAnimationId = null;
 const messageInputEl = document.getElementById("messageInput");
 const messageMap = new Map();
+const staticSalt = getOrCreateSalt();
+const splashWall = document.getElementById("splashWall");
+const masterPhraseForm = document.getElementById("masterPhraseForm");
+const masterPhraseInput = document.getElementById("masterPhraseInput");
+const mainApp = document.getElementById("mainApp");
+const chatLog = document.getElementById("chatLog");
+const messageForm = document.getElementById("messageForm");
+const lockBtn = document.getElementById("lockBtn");
+const statusRing = document.getElementById("statusRing");
+const statusText = document.getElementById("statusText");
+let localMediaStream = null;
+let isAudioMuted = false;
+let isVideoMuted = false;
+let mediaSenders = [];
+const callOverlay = document.getElementById("callOverlay");
+const localVideoEl = document.getElementById("localVideo");
+const remoteVideoEl = document.getElementById("remoteVideo")
+const initiateCallBtn = document.getElementById("initiateCallBtn");
+const toggleAudioBtn = document.getElementById("toggleAudioBtn");
+const toggleVideoBtn = document.getElementById("toggleVideoBtn");
+const endCallBtn = document.getElementById("endCallBtn");
+const EmojiList = ["👍", "❤️", "😂", "😮", "😢", "🔥"];
+let activePickerEl = null;
+let replyContext = null;
+const replyContextBar = document.getElementById("replyContextBar");
+const replyPreviewText = document.getElementById("replyPreviewText");
+const cancelReplyBtn = document.getElementById("cancelReplyBtn");
+const genOfferBtn = document.getElementById("genOfferBtn");
+const localSdpTextArea = document.getElementById("localSdpTextArea");
+const remoteSdpTextArea = document.getElementById("remoteSdpTextArea");
+const acceptRemoteBtn = document.getElementById("acceptRemoteBtn");
+let peerConnection = null;
+let dataChannel = null;
 
 function generateMsgId() {
   return crypto.randomUUID();
@@ -56,30 +88,6 @@ function getOrCreateSalt() {
   localStorage.setItem("javault_pbkdf2_salt", bufferToHex(fresh));
   return fresh;
 }
-
-const staticSalt = getOrCreateSalt();
-
-const splashWall = document.getElementById("splashWall");
-const masterPhraseForm = document.getElementById("masterPhraseForm");
-const masterPhraseInput = document.getElementById("masterPhraseInput");
-const mainApp = document.getElementById("mainApp");
-const chatLog = document.getElementById("chatLog");
-const messageForm = document.getElementById("messageForm");
-const lockBtn = document.getElementById("lockBtn");
-const statusRing = document.getElementById("statusRing");
-const statusText = document.getElementById("statusText");
-let localMediaStream = null;
-let isAudioMuted = false;
-let isVideoMuted = false;
-let mediaSenders = [];
-
-const callOverlay = document.getElementById("callOverlay");
-const localVideoEl = document.getElementById("localVideo");
-const remoteVideoEl = document.getElementById("remoteVideo")
-const initiateCallBtn = document.getElementById("initiateCallBtn");
-const toggleAudioBtn = document.getElementById("toggleAudioBtn");
-const toggleVideoBtn = document.getElementById("toggleVideoBtn");
-const endCallBtn = document.getElementById("endCallBtn");
 
 function renderMessage(
   text,
@@ -154,6 +162,17 @@ function renderMessage(
   const metaEl = document.createElement("span");
   metaEl.classList.add("msgMeta");
   metaEl.textContent = timeStr;
+  let tickSpan = null;
+  if (direction === "outgoing") {
+    const tickWrapper = document.createElement("span");
+    tickWrapper.className = "msgTicks";
+    tickSpan = document.createElement("span");
+    tickSpan.className = "tick";
+    tickSpan.textContent = "✓"
+    tickWrapper.appendChild(tickSpan);
+    metaEl.appendChild(tickWrapper);
+  }
+
   bubbleEl.appendChild(metaEl);
 
   const reactionBar = document.createElement("div");
@@ -163,20 +182,17 @@ function renderMessage(
   rowEl.appendChild(bubbleEl);
   chatLog.appendChild(rowEl);
   chatLog.scrollTop = chatLog.scrollHeight;
-
   messageMap.set(msgId,
     {
       rowEl,
       reactionBar,
       reactionsData: new Map(),
       text,
+      tickEl: tickSpan,
     }
   );
   return { rowEl, msgId };
 }
-
-const EmojiList = ["👍", "❤️", "😂", "😮", "😢", "🔥"];
-let activePickerEl = null;
 
 function showEmojiPicker(msgId, rowEl, direction) {
   closeEmojiPicker();
@@ -271,10 +287,39 @@ function applyReaction(targetMsgId, emoji, source) {
   }
 }
 
-let replyContext = null;
-const replyContextBar = document.getElementById("replyContextBar");
-const replyPreviewText = document.getElementById("replyPreviewText");
-const cancelReplyBtn = document.getElementById("cancelReplyBtn");
+function updateMsgTick(msgId, status) {
+  const entry = messageMap.get(msgId);
+  if (!entry || !entry.tickEl) return;
+  if (status === "delivered") {
+    entry.tickEl.className = "tick delivered";
+    entry.tickEl.textContent = "✓✓";
+  }
+  else if (status === "read") {
+    entry.tickEl.className = "tick read";
+    entry.tickEl.textContent = "✓✓";
+  }
+}
+
+async function sendReadUpdate(msgId) {
+  if(!dataChannel || dataChannel.readyState !== "open" || !chatSession.key) return;
+
+  try {
+    const ack = {
+      type: "MSG_ACK",
+      status: "read",
+      msgId
+    };
+    const encryptedAck = await encryptText(JSON.stringify(ack), chatSession.key);
+    dataChannel.send(JSON.stringify({
+      type: "MSG_ACK",
+      iv: encryptedAck.iv,
+      ciphertext: encryptedAck.ciphertext,
+    }));
+  }
+  catch (e) {
+    console.warn("Failed to send read update: ", e);
+  }
+}
 
 function setReplyContext(msgId, text) {
   replyContext = {msgId, text};
@@ -453,14 +498,6 @@ lockBtn.addEventListener("click", () => {
   mainApp.classList.add("hidden");
   splashWall.classList.remove("hidden");
 });
-
-let peerConnection = null;
-let dataChannel = null;
-
-const genOfferBtn = document.getElementById("genOfferBtn");
-const localSdpTextArea = document.getElementById("localSdpTextArea");
-const remoteSdpTextArea = document.getElementById("remoteSdpTextArea");
-const acceptRemoteBtn = document.getElementById("acceptRemoteBtn");
 
 function initializePeerConnection() {
   console.log("Initializing Peer Connection!");
@@ -739,7 +776,48 @@ async function handleIncomingMsg(rawWireDate) {
           minute: "2-digit",
         });
       }
-      renderMessage(plainText, "incoming", displayTime, false, "", msgId, replyTo || null);
+      const {rowEl} = renderMessage(plainText, "incoming", displayTime, false, "", msgId, replyTo || null);
+
+      if(dataChannel && dataChannel.readyState === "open" && chatSession.key) {
+        try {
+          const isFocused = document.hasFocus();
+          const statusState = isFocused ? "read" : "delivered";
+
+          if(isFocused) {
+            rowEl.dataset.readAcknowledged = "true";
+          }
+
+          const ack = {
+            type: "MSG_ACK",
+            status: statusState,
+            msgId
+          };
+          const encryptedAck = await encryptText(JSON.stringify(ack), chatSession.key);
+          dataChannel.send(JSON.stringify({
+            type: "MSG_ACK",
+            iv: encryptedAck.iv,
+            ciphertext: encryptedAck.ciphertext,
+          }));
+        } catch (e) {
+          console.warn("Failed to send ack: ", e);
+        }
+      }
+    }
+
+    if(parsedFrame && parsedFrame.type === "MSG_ACK") {
+      if (!chatSession.key) return;
+      try {
+        const decryptedJSON = await decryptText(
+          parsedFrame.ciphertext,
+          parsedFrame.iv,
+          chatSession.key,
+        );
+        const {msgId, status} = JSON.parse(decryptedJSON);
+        updateMsgTick(msgId, status);
+      } catch (e) {
+        console.error("Failed to decrypt ACK: ", e)
+      }
+      return;
     }
 
     if (parsedFrame && parsedFrame.type === "REACTION") {
@@ -1335,3 +1413,15 @@ document.getElementById("fileInput").addEventListener("change", (e) => {
 });
 genOfferBtn.addEventListener("click", generateLocalConnectionOffer);
 acceptRemoteBtn.addEventListener("click", acceptRemotePeerConnection);
+
+window.addEventListener("focus", ()=> {
+  if(!dataChannel || dataChannel.readyState !== "open" || !chatSession.key) return;
+
+  messageMap.forEach((value, msgId) => {
+    const rowEl = value.rowEl;
+    if(rowEl.classList.contains("incoming") && !rowEl.dataset.readAcknowledged) {
+      sendReadUpdate(msgId);
+      rowEl.dataset.readAcknowledged = "true";
+    }
+  })
+})

@@ -74,6 +74,9 @@ const remoteSdpTextArea = document.getElementById("remoteSdpTextArea");
 const acceptRemoteBtn = document.getElementById("acceptRemoteBtn");
 let peerConnection = null;
 let dataChannel = null;
+const voiceRecordBtn = document.getElementById("voiceRecordBtn");
+let mediaRecordInstance = null;
+let recordedAudioChunks = [];
 
 function generateMsgId() {
   return crypto.randomUUID();
@@ -97,12 +100,15 @@ function renderMessage(
   imageDataUrl = "",
   msgId = null,
   replyTo = null,
+  isAudio = false,
+  audioDataUrl = ""
 ) {
   if(!msgId) msgId = generateMsgId();
 
   const rowEl = document.createElement("div");
   rowEl.classList.add("msgRow", direction);
   rowEl.dataset.msgId = msgId;
+
   const actionsEl = document.createElement("div");
   actionsEl.className = "msgActions";
   const reactBtn = document.createElement("button");
@@ -136,7 +142,17 @@ function renderMessage(
     bubbleEl.appendChild(quoteEl);
   }
 
-  if (isImage && imageDataUrl) {
+  if(isAudio && audioDataUrl) {
+    const voiceContainer = document.createElement("div");
+    voiceContainer.className = "voiceMessageContainer";
+    const audioNode = document.createElement("audio");
+    audioNode.src = audioDataUrl;
+    audioNode.controls = true;
+    audioNode.preload = "metadata";
+
+    voiceContainer.appendChild(audioNode)
+    bubbleEl.appendChild(voiceContainer);
+  } else if (isImage && imageDataUrl) {
     const imageLink = document.createElement("a");
     imageLink.href = imageDataUrl;
     imageLink.download = text || "encryptedImage.png";
@@ -250,7 +266,7 @@ function closeEmojiPicker() {
 
 async function sendReaction(targetMsgId, emoji) {
   applyReaction(targetMsgId, emoji, "local");
-  if(!dataChannel || dataChannel.readyState !== "open" || !chatSession.key) return;
+  if(!dataChannel || dataChannel.readyState !== "open" || !chatSession.ackKey) return;
 
   const payload = {
     type: "REACTION",
@@ -260,7 +276,7 @@ async function sendReaction(targetMsgId, emoji) {
   };
 
   try {
-    const encrypted = await encryptText(JSON.stringify(payload), chatSession.key);
+    const encrypted = await encryptText(JSON.stringify(payload), chatSession.ackKey);
     dataChannel.send(JSON.stringify({
       type: "REACTION",
       iv: encrypted.iv,
@@ -301,7 +317,7 @@ function updateMsgTick(msgId, status) {
 }
 
 async function sendReadUpdate(msgId) {
-  if(!dataChannel || dataChannel.readyState !== "open" || !chatSession.key) return;
+  if(!dataChannel || dataChannel.readyState !== "open" || !chatSession.ackKey) return;
 
   try {
     const ack = {
@@ -309,7 +325,7 @@ async function sendReadUpdate(msgId) {
       status: "read",
       msgId
     };
-    const encryptedAck = await encryptText(JSON.stringify(ack), chatSession.key);
+    const encryptedAck = await encryptText(JSON.stringify(ack), chatSession.ackKey);
     dataChannel.send(JSON.stringify({
       type: "MSG_ACK",
       iv: encryptedAck.iv,
@@ -352,7 +368,8 @@ function updateStatusUI(state) {
 
 masterPhraseForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const userMasterPhrase = masterPhraseInput.value;
+  const userMasterPhrase = masterPhraseInput.value.trim();
+  if(!userMasterPhrase) return;
 
   if (userMasterPhrase.length >= 8) {
     try {
@@ -360,10 +377,10 @@ masterPhraseForm.addEventListener("submit", async (event) => {
         userMasterPhrase,
         staticSalt,
       );
-      console.log("CryptoKey Object Created!");
+      // console.log("CryptoKey Object Created!");
       splashWall.classList.add("hidden");
       mainApp.classList.remove("hidden");
-      masterPhraseInput.value = "";
+      // masterPhraseInput.value = "";
 
       await loadAndDecryptHistory();
     } catch (error) {
@@ -408,7 +425,7 @@ messageForm.addEventListener("submit", async (event) => {
     renderMessage(plainText, "outgoing", "", false, "", msgId, currentReply);
 
     if (dataChannel && dataChannel.readyState === "open") {
-      if (!chatSession.key) {
+      if (!chatSession.sendChainKey) {
         console.warn("Session Encryption Key not registered yet.");
         return;
       }
@@ -476,6 +493,8 @@ async function loadAndDecryptHistory() {
         record.fileData || "",
         record.msgId || null,
         record.replyTo || null,
+        record.isAudio || false,
+        record.fileData || ""
       );
     } catch (error) {
       console.error("Decryption Failed", error);
@@ -486,6 +505,7 @@ async function loadAndDecryptHistory() {
 lockBtn.addEventListener("click", () => {
   masterStorageKey = null;
   chatSession.key = null;
+  chatSession.ackKey = null;
   chatSession.sendChainKey = null;
   chatSession.recvChainKey = null;
   chatSession.history = [];
@@ -659,9 +679,9 @@ async function handleIncomingMsg(rawWireDate) {
   try {
     const parsedFrame = JSON.parse(rawWireDate);
 
-    if (parsedFrame && parsedFrame.type === "TYPING_SIGNAL" && chatSession.key) {
+    if (parsedFrame && parsedFrame.type === "TYPING_SIGNAL" && chatSession.ackKey) {
       try {
-        const decrypted = await decryptText(parsedFrame.ciphertext, parsedFrame.iv, chatSession.key);
+        const decrypted = await decryptText(parsedFrame.ciphertext, parsedFrame.iv, chatSession.ackKey);
         const signal = JSON.parse(decrypted);
         if(signal.status === "typing"){
           showTypingIndicator();
@@ -693,10 +713,11 @@ async function handleIncomingMsg(rawWireDate) {
         console.log("Offerer role detected.");
 
         const freshSessionKey = await generateSharedSessionKey();
-
-        const rawKeyBits = await window.crypto.subtle.exportKey("raw", freshSessionKey);
-        chatSession.sendChainKey = rawKeyBits;
-        chatSession.recvChainKey = rawKeyBits.slice(0);
+        chatSession.ackKey = freshSessionKey;
+        const rawKeyBits = new Uint8Array(await window.crypto.subtle.exportKey("raw", freshSessionKey));
+        chatSession.sendChainKey = rawKeyBits.buffer;
+        const recvSeed = rawKeyBits.map((b,i) => b ^ 0xA5);
+        chatSession.recvChainKey = recvSeed.buffer;
 
         const wrappedKeyBuffer = await wrapSymmetricKey(
           freshSessionKey,
@@ -730,9 +751,12 @@ async function handleIncomingMsg(rawWireDate) {
         localEphemeralKeyPair.privateKey,
       );
 
-      const rawKeyBits = await window.crypto.subtle.exportKey("raw", unwrappedSessionKey);
-      chatSession.sendChainKey = rawKeyBits;
-      chatSession.recvChainKey = rawKeyBits.slice(0);
+      chatSession.ackKey = unwrappedSessionKey;
+
+      const rawKeyBits = new Uint8Array(await window.crypto.subtle.exportKey("raw", unwrappedSessionKey));
+      const recvSeed = rawKeyBits.map((b, i) => b ^ 0xA5);
+      chatSession.sendChainKey = recvSeed.buffer;
+      chatSession.recvChainKey = rawKeyBits.buffer;
 
       console.log("Symetric session key decrypted and extracted");
       return;
@@ -740,7 +764,7 @@ async function handleIncomingMsg(rawWireDate) {
 
     if (parsedFrame && parsedFrame.type === "TEXT_MESSAGE") {
       hideTypingIndicator();
-      if (!chatSession.key) {
+      if (!chatSession.recvChainKey) {
         renderMessage(
           "Error: Cannot Decrypt Message. Local Session Locked",
           "incoming"
@@ -791,7 +815,7 @@ async function handleIncomingMsg(rawWireDate) {
       }
       const {rowEl} = renderMessage(plainText, "incoming", displayTime, false, "", msgId, replyTo || null);
 
-      if(dataChannel && dataChannel.readyState === "open" && chatSession.key) {
+      if(dataChannel && dataChannel.readyState === "open" && chatSession.ackKey) {
         try {
           const isFocused = document.hasFocus();
           const statusState = isFocused ? "read" : "delivered";
@@ -805,7 +829,7 @@ async function handleIncomingMsg(rawWireDate) {
             status: statusState,
             msgId
           };
-          const encryptedAck = await encryptText(JSON.stringify(ack), chatSession.key);
+          const encryptedAck = await encryptText(JSON.stringify(ack), chatSession.ackKey);
           dataChannel.send(JSON.stringify({
             type: "MSG_ACK",
             iv: encryptedAck.iv,
@@ -818,12 +842,12 @@ async function handleIncomingMsg(rawWireDate) {
     }
 
     if(parsedFrame && parsedFrame.type === "MSG_ACK") {
-      if (!chatSession.key) return;
+      if (!chatSession.ackKey) return;
       try {
         const decryptedJSON = await decryptText(
           parsedFrame.ciphertext,
           parsedFrame.iv,
-          chatSession.key,
+          chatSession.ackKey,
         );
         const {msgId, status} = JSON.parse(decryptedJSON);
         updateMsgTick(msgId, status);
@@ -833,13 +857,23 @@ async function handleIncomingMsg(rawWireDate) {
       return;
     }
 
+    if(parsedFrame && parsedFrame.type === "READ_RECEIPT") {
+      const trackedMsg = messageMap.get(parsedFrame.msgId);
+      if (trackedMsg && trackedMsg.tickEl) {
+        trackedMsg.tickEl.textContent = "✓✓";
+        trackedMsg.tickEl.classList.remove("delivered");
+        trackedMsg.tickEl.classList.add("read");
+      }
+      return;
+    }
+
     if (parsedFrame && parsedFrame.type === "REACTION") {
-      if(!chatSession.key) return;
+      if(!chatSession.ackKey) return;
       try {
         const decryptedJSON = await decryptText(
           parsedFrame.ciphertext,
           parsedFrame.iv,
-          chatSession.key,
+          chatSession.ackKey,
         );
         const {targetMsgId, emoji} = JSON.parse(decryptedJSON);
         applyReaction(targetMsgId, emoji, "remote");
@@ -900,13 +934,19 @@ async function handleIncomingMsg(rawWireDate) {
         return;
       }
 
-      const orderedChunks = fileContext.chunks.filter(Boolean);
+      // const orderedChunks = fileContext.chunks.filter(Boolean);
 
-      const combinedBlob = new Blob(orderedChunks, {
+      const combinedBlob = new Blob(fileContext.chunks, {
         type: fileContext.mimeType,
       });
+      const dataUrl = URL.createObjectURL(combinedBlob);
+      
 
-      if (fileContext.mimeType && fileContext.mimeType.startsWith("image/")) {
+      if(fileContext.mimeType === "audio/wav;secure=true")
+      {
+        renderMessage("Voice Message Recieved", "incoming", "", false, "", null, null, true, dataUrl)
+      }
+      else if (fileContext.mimeType && fileContext.mimeType.startsWith("image/")) {
         const base64Reader = new FileReader();
         base64Reader.onloadend = async () => {
           const base64DataUrl = base64Reader.result;
@@ -970,9 +1010,9 @@ async function handleIncomingMsg(rawWireDate) {
     }
 
     if(parsedFrame && parsedFrame.type === "CALL_SIGNAL") {
-      if(!chatSession.key) return;
+      if(!chatSession.ackKey) return;
 
-      const decryptedSignalJson = await decryptText(parsedFrame.ciphertext, parsedFrame.iv, chatSession.key);
+      const decryptedSignalJson = await decryptText(parsedFrame.ciphertext, parsedFrame.iv, chatSession.ackKey);
       const signalData = JSON.parse(decryptedSignalJson);
 
       if(signalData.subtype === "MEDIA_OFFER") {
@@ -1021,7 +1061,7 @@ async function handleIncomingMsg(rawWireDate) {
 }
 
 async function transferEncryptedFile(file) {
-  if (!dataChannel || dataChannel.readyState !== "open" || !chatSession.key) {
+  if (!dataChannel || dataChannel.readyState !== "open" || !chatSession.ackKey) {
     alert("Cannot send file: Connection Inactive");
     return;
   }
@@ -1175,13 +1215,13 @@ function hideTypingIndicator() {
 }
 
 messageInputEl.addEventListener("input", async () => {
-  if (dataChannel && dataChannel.readyState === "open" && chatSession.key) {
+  if (dataChannel && dataChannel.readyState === "open" && chatSession.ackKey) {
     if (!isLocallyTyping) {
       isLocallyTyping = true;
       try {
         const encrypted = await encryptText(
           JSON.stringify({status: "typing"}),
-          chatSession.key
+          chatSession.ackKey
         );
         dataChannel.send(JSON.stringify({type: "TYPING_SIGNAL", iv: encrypted.iv, ciphertext: encrypted.ciphertext}));
 
@@ -1196,7 +1236,7 @@ messageInputEl.addEventListener("input", async () => {
       try {
         const encrypted = await encryptText(
           JSON.stringify({status: "idle"}),
-          chatSession.key
+          chatSession.ackKey
         );
         dataChannel.send(JSON.stringify({type: "TYPING_SIGNAL", iv: encrypted.iv, ciphertext: encrypted.ciphertext}));
       } catch (error) {
@@ -1312,8 +1352,8 @@ function hideQrScanner() {
 }
 
 async function transmitCallSignal(payLoadData) {
-  if (dataChannel && dataChannel.readyState === "open" && chatSession.key) {
-    const encryptedWirePkg = await encryptText(JSON.stringify(payLoadData), chatSession.key);
+  if (dataChannel && dataChannel.readyState === "open" && chatSession.ackKey) {
+    const encryptedWirePkg = await encryptText(JSON.stringify(payLoadData), chatSession.ackKey);
     const wirePayLoad = {
       type: "CALL_SIGNAL",
       iv: encryptedWirePkg.iv,
@@ -1438,13 +1478,155 @@ genOfferBtn.addEventListener("click", generateLocalConnectionOffer);
 acceptRemoteBtn.addEventListener("click", acceptRemotePeerConnection);
 
 window.addEventListener("focus", ()=> {
-  if(!dataChannel || dataChannel.readyState !== "open" || !chatSession.key) return;
+  if(!dataChannel || dataChannel.readyState !== "open" || !chatSession.sendChainKey) return;
 
   messageMap.forEach((value, msgId) => {
+    if(value.rowEl.classList.contains("incoming")) return;
     const rowEl = value.rowEl;
-    if(rowEl.classList.contains("incoming") && !rowEl.dataset.readAcknowledged) {
-      sendReadUpdate(msgId);
-      rowEl.dataset.readAcknowledged = "true";
-    }
+    dataChannel.send(JSON.stringify({
+      type: "READ_RECEIPT",
+      msgId: msgId
+    }))
   })
 })
+
+async function startVoiceRecording() {
+  if (!dataChannel || dataChannel.readyState !== "open") {
+    alert("Cannot record voice because Peer Connection is offile");
+    return;
+  }
+  try {
+    recordedAudioChunks = [];
+    const captureStream = await navigator.mediaDevices.getUserMedia({
+      audio: true
+    });
+    mediaRecordInstance = new MediaRecorder(captureStream);
+
+    mediaRecordInstance.ondataavailable = (event) => {
+      if(event.data && event.data.size > 0) {
+        recordedAudioChunks.push(event.data);
+      }
+    };
+
+    mediaRecordInstance.onstop = async () => {
+      captureStream.getTracks().forEach(track => track.stop());
+      const audioBlob = new Blob(recordedAudioChunks, {
+        type: "audio/wav"
+      });
+
+    if(audioBlob.size > 0) {
+      await processSendVoiceMsg(audioBlob);
+    }
+    };
+    mediaRecordInstance.start();
+    voiceRecordBtn.classList.add("recording");
+    console.log("Audio Recording Pipeline processing input");
+  } catch (error) {
+    console.error("Microphone configuration access error: ", error);
+    alert("Could not access audio device.")
+  }
+}
+
+function stopVoiceRecording() {
+  if (mediaRecordInstance && mediaRecordInstance.state !== "inactive"){
+    mediaRecordInstance.stop();
+  }
+  voiceRecordBtn.classList.remove("recording");
+}
+
+async function processSendVoiceMsg(audioBlob) {
+  try {
+    const rawBuffer = await audioBlob.arrayBuffer();
+    const uniqueFileId = crypto.randomUUID();
+    const targetMimeType = "audio/wav;secure=true";
+    const descriptorLabel = "VoiceMessage.wav";
+
+    const localDataUrl = URL.createObjectURL(audioBlob);
+    const clientMsgId = generateMsgId();
+
+    renderMessage("Voice Message Sent", "outgoing", "", false, "", clientMsgId, null, true, localDataUrl);
+    const historyPayload = {
+      msgId: clientMsgId,
+      text: "Voice Message Sent",
+      direction: "outgoing",
+      timestamp: Date.now(),
+      isImage: false,
+      isAudio: true,
+      fileData: localDataUrl
+    };
+    const encryptedHistoryPkg = await encryptText(JSON.stringify(historyPayload), masterStorageKey);
+    const savedHistory = JSON.parse(localStorage.getItem("javault_history") || "[]");
+    savedHistory.push(encryptedHistoryPkg);
+    localStorage.setItem("javault_history", JSON.stringify(savedHistory));
+
+    const binaryByteLen = rawBuffer.byteLength;
+    const computedTotalChunks = Math.ceil(binaryByteLen / CHUNK_SIZE);
+
+    dataChannel.send(JSON.stringify({
+      type: "FILE_START",
+      fileId: uniqueFileId,
+      name: descriptorLabel,
+      mimeType: targetMimeType,
+      totalChunks: computedTotalChunks
+    }));
+    for (let chunkIndex = 0; chunkIndex < computedTotalChunks; chunkIndex++) {
+      const byteStartOffset = chunkIndex * CHUNK_SIZE;
+      const sliceSizeBound = Math.min(CHUNK_SIZE, binaryByteLen - byteStartOffset);
+      const dataChunkSlice = rawBuffer.slice(byteStartOffset, byteStartOffset + sliceSizeBound);
+      const { nextChainKeyBuffer, msgKey } = await ratchetStep(chatSession.sendChainKey);
+      chatSession.sendChainKey = nextChainKeyBuffer;
+      const encryptedChunkPayload = await encryptBuffer(dataChunkSlice, msgKey);
+
+      dataChannel.send(JSON.stringify({
+        type: "FILE_CHUNK",
+        fileId: uniqueFileId,
+        chunkIndex: chunkIndex,
+        iv: encryptedChunkPayload.iv,
+        ciphertext: encryptedChunkPayload.ciphertext
+      }));
+    }
+
+    dataChannel.send(JSON.stringify({
+      type: "FILE_END",
+      fileId: uniqueFileId
+    }))
+
+    console.log("Encrypted Audio File Processing completed!")
+  } catch (error) {
+    console.error("Voice encryption crash: ", error);
+  }
+}
+
+voiceRecordBtn.addEventListener("mousedown", (e)=> {
+  e.preventDefault();
+  startVoiceRecording();
+});
+voiceRecordBtn.addEventListener("mouseup", (e)=> {
+  e.preventDefault();
+  stopVoiceRecording();
+});
+voiceRecordBtn.addEventListener("mouseleave", (e)=> {
+  e.preventDefault();
+  stopVoiceRecording();
+});
+voiceRecordBtn.addEventListener("touchstart", (e)=> {
+  e.preventDefault();
+  startVoiceRecording();
+},
+{
+  passive: false
+});
+voiceRecordBtn.addEventListener("touchend", (e)=> {
+  e.preventDefault();
+  stopVoiceRecording();
+},
+{
+  passive: false
+});
+voiceRecordBtn.addEventListener("touchcancel", (e)=> {
+  e.preventDefault();
+  stopVoiceRecording();
+},
+{
+  passive: false
+});

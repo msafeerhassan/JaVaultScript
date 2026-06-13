@@ -79,6 +79,8 @@ let mediaRecordInstance = null;
 let recordedAudioChunks = [];
 const EDIT_WINDOW_MS = 5 * 60 * 1000;
 let editingMsgId = null;
+const historySearchInput = document.getElementById("historySearchInput");
+const exportHistoryBtn = document.getElementById("exportHistoryBtn");
 
 function generateMsgId() {
   return crypto.randomUUID();
@@ -700,6 +702,84 @@ async function loadAndDecryptHistory() {
   }
 }
 
+historySearchInput.addEventListener("input", (e) => {
+  const query = e.target.value.toLowerCase().trim();
+  messageMap.forEach((entry) => {
+    if(!query) {
+      entry.rowEl.style.display = "";
+      return;
+    }
+
+    if (entry.text && entry.text.toLowerCase().includes(query)) {
+      entry.rowEl.style.display = "";
+    }
+    else {
+      entry.rowEl.style.display = "none";
+    }
+  });
+});
+
+exportHistoryBtn.addEventListener("click", async () => {
+  if(!masterStorageKey) {
+    alert("SessionKey not Available. Cannot Export.");
+    return;
+  }
+
+  const savedHistory = JSON.parse(localStorage.getItem("javault_history") || "[]");
+  if(savedHistory.length === 0) {
+    alert("No history present");
+    return;
+  }
+
+  const decryptedRecords = [];
+
+  for(const msgPkg of savedHistory) {
+    try {
+      const decryptedJSON = await decryptText(
+        msgPkg.ciphertext,
+        msgPkg.iv,
+        masterStorageKey
+      );
+      decryptedRecords.push(JSON.parse(decryptedJSON));
+    } catch (error) {
+      console.error("Export Decryption failed: ", error);
+    }
+  }
+
+  if(decryptedRecords.length === 0) {
+    alert("No History Messages could be successfully decrypted :(");
+    return;
+  }
+
+  try {
+    const rawExportString = JSON.stringify(decryptedRecords, null, 2);
+    const encryptedExportPkg = await encryptText(rawExportString, masterStorageKey);
+
+    const backUpContainer = {
+      vaultExport: true,
+      timestamp: Date.now(),
+      payload: encryptedExportPkg
+    };
+
+    const blob = new Blob([JSON.stringify(backUpContainer, null, 2)], {
+      type: "application/json"
+    });
+    const url = URL.createObjectURL(blob);
+
+    const downloadAnchor = document.createElement("a");
+    downloadAnchor.href = url;
+    downloadAnchor.download = `javault_secure_backup_${Date.now()}.json`;
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+
+    document.body.removeChild(downloadAnchor);
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error("Export Generation Error: ", error);
+    alert("Failed to encrypt export package");
+  }
+});
+
 lockBtn.addEventListener("click", () => {
   masterStorageKey = null;
   chatSession.key = null;
@@ -708,6 +788,8 @@ lockBtn.addEventListener("click", () => {
   chatSession.recvChainKey = null;
   chatSession.history = [];
   chatLog.innerHTML = ""
+
+  if(historySearchInput) historySearchInput.value = "";
 
   if (peerConnection) {
     peerConnection.close();

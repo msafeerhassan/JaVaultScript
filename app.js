@@ -82,6 +82,32 @@ let editingMsgId = null;
 const historySearchInput = document.getElementById("historySearchInput");
 const exportHistoryBtn = document.getElementById("exportHistoryBtn");
 
+function showNotification(message, type="info") {
+  const container = document.getElementById("alertContainer");
+  if(!container) return;
+
+  const alert = document.createElement("div");
+  alert.className = `alertCard ${type}`;
+  const textContainer = document.createElement("span");
+  textContainer.textContent = message;
+  alert.appendChild(textContainer);
+
+  const closeBtn = document.createElement("button");
+  closeBtn.textContent = "x";
+  closeBtn.style.cssText = "background:none; border:none; color:inherit; font-size:1.25rem; cursor:pointer; margin-left: 1rem; opacity: 0.7;";
+  closeBtn.onclick = () => dismissAlert(alert);
+  alert.appendChild(closeBtn);
+
+  container.appendChild(alert);
+  setTimeout(()=> dismissAlert(alert), 4500);
+}
+
+function dismissAlert(alert) {
+  if(alert.classList.contains("alertFadeOut")) return;
+  alert.classList.add("alertFadeOut");
+  alert.addEventListener("animationend", ()=> alert.remove());
+}
+
 function generateMsgId() {
   return crypto.randomUUID();
 }
@@ -545,25 +571,29 @@ masterPhraseForm.addEventListener("submit", async (event) => {
   const userMasterPhrase = masterPhraseInput.value.trim();
   if(!userMasterPhrase) return;
 
-  if (userMasterPhrase.length >= 8) {
-    try {
+  if(userMasterPhrase < 8) {
+    showNotification("The master phrase must be atleast 8 characters long.", "warning");
+    return;
+  }
+
+  try {
+    masterPhraseForm.querySelector('button[type="submit"]').disabled = true;
       masterStorageKey = await deriveKeyFromPhrase(
         userMasterPhrase,
         staticSalt,
       );
-      // console.log("CryptoKey Object Created!");
       splashWall.classList.add("hidden");
       mainApp.classList.remove("hidden");
-      // masterPhraseInput.value = "";
-
       await loadAndDecryptHistory();
+      showNotification("JaVaultScript Login Successful!", "success");
     } catch (error) {
       console.error(error);
-      alert("Cryptographic Initialization Failed!");
+      showNotification("Cryptographic Initialization Failed. Please refresh and try again", "error");
+      masterStorageKey = null;
     }
-  } else {
-    alert("It must be atleast 8 characters long.");
-  }
+    finally {
+      masterPhraseForm.querySelector('button[type="submit"]').disabled = false;
+    }
 });
 
 messageForm.addEventListener("submit", async (event) => {
@@ -904,12 +934,18 @@ async function generateLocalConnectionOffer() {
 async function acceptRemotePeerConnection() {
   const rawInputText = remoteSdpTextArea.value.trim();
   if (!rawInputText) {
-    alert("Please paste a remote SDP COde!");
+    showNotification("Please provide a valid remote SDP Session Profile", "warning");
     return;
   }
 
   try {
-    const remoteDescriptionObject = JSON.parse(atob(rawInputText));
+    let remoteDescriptionObject;
+    try {
+      remoteDescriptionObject = JSON.parse(atob(rawInputText));
+    } catch (error) {
+      throw new Error("The signature code format is corrupted/malformed.");
+    }
+
     if (!peerConnection) {
       initializePeerConnection();
     }
@@ -917,20 +953,23 @@ async function acceptRemotePeerConnection() {
     await peerConnection.setRemoteDescription(
       new RTCSessionDescription(remoteDescriptionObject),
     );
-    console.log(
-      `Remote Description Applied Successfuly! Type: ${remoteDescriptionObject.type}`,
-    );
 
     if (remoteDescriptionObject.type === "offer") {
-      console.log("Connection Offer Detected!");
       const answer = await peerConnection.createAnswer();
       await peerConnection.setLocalDescription(answer);
+      showNotification("Remote Connection Offer Configured. Share your local response code.", "success");
     } else if (remoteDescriptionObject.type === "answer") {
-      console.log("Answer Recieved and Processed!");
+      showNotification("Remote answer cofigured. Establishing Pathway", "success");
     }
   } catch (error) {
     console.error("Failed to Parse SDP Code.");
-    alert("Invalid String :(");
+    showNotification(`Link Parsing Error: ${error.message}`, "error");
+    
+    if(peerConnection) {
+      peerConnection.close();
+      peerConnection = null;
+  }
+  updateStatusUI("idle");
   }
 }
 

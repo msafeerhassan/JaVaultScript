@@ -1,39 +1,47 @@
 body {
   margin: 0;
-  font-family:
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    Roboto,
-    Oxygen,
-    Ubuntu,
-    Cantarell,
-    "Open Sans",
-    "Helvetica Neue",
-    sans-serif;
-  background-color: #0f172a;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: #0b111e;
   color: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+#mainApp {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 2rem;
-  background-color: #1e293b;
-  border-bottom: 1px solid #334155;
+  padding: 0.85rem 1.5rem;
+  background-color: #151f32;
+  border-bottom: 1px solid #243552;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
 }
 
-.headerTitleContainer {
+/* .headerTitleContainer {
   display: flex;
   align-items: center;
   gap: 1.5rem;
-}
+} */
 
 header h1 {
-  margin: 0;
-  font-size: 1.5rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.025rem;
+  background: linear-gradient(135deg, #60a5fa, #3b82f6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .statusContainer {
@@ -143,6 +151,9 @@ header h1 {
 }
 
 .signalingGrid {
+  flex-shrink: 0;
+  /* max-height: 35vh; */
+  overflow-y: auto;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1.5rem;
@@ -199,31 +210,59 @@ header h1 {
 }
 
 #chatLog {
-  height: 350px;
+  flex-grow: 1 1 0%;
+  min-height: 0;
+  height: auto;
   overflow-y: auto;
-  margin: 1rem;
+  margin: 0;
   padding: 1rem;
-  background-color: #1e293b;
-  border: 1px solid #334155;
-  border-radius: 8px;
+  box-sizing: border-box;
+  background-color: #0b111e;
+  border: none;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 1rem;
+  scroll-behavior: smooth;
+}
+
+#chatLog::-webkit-scrollbar {
+  width: 6px;
+}
+
+#chatLog::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#chatLog::-webkit-scrollbar-thumb {
+  background: #243552;
+  border-radius: 10px;
 }
 
 #messageForm {
   display: flex;
-  gap: 1rem;
-  margin: 1rem;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 1rem 1.5rem;
+  background-color: #151f32;
+  border-top: 1px solid #243552;
 }
 
-#messageForm input {
+#messageForm input[type="text"] {
   flex-grow: 1;
-  padding: 0.75rem;
-  border-radius: 6px;
-  border: 1px solid #475569;
-  background-color: #1e293b;
-  color: #fff;
+  padding: 0.8rem 1.2rem;
+  border-radius: 24px;
+  border: 1px solid #243552;
+  background-color: #0b111e;
+  color: #f8fafc;
+  font-size: 0.95rem;
+  transition: all 0.2s ease;
+}
+
+#messageForm input[type="text"]:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 
 #messageForm button {
@@ -253,7 +292,8 @@ header h1 {
 .msgRow {
   position:relative;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
+  gap: 0.5rem;
 }
 
 .msgRow.outgoing {
@@ -265,27 +305,22 @@ header h1 {
 }
 
 .msgBubble {
-  position: relative;
-  max-width: 70%;
-  padding: 0.6rem 0.9rem;
-  border-radius: 12px;
-  font-size: 0.95rem;
-  line-height: 1.4;
-  word-break: break-word;
-  display: flex;
-  flex-direction: column;
+  max-width: 65%;
+  padding: 0.75rem 1.1rem;
+  border-radius: 18px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: transform 0.1s ease;
 }
 
-.msgRow.msgRow.outgoing .msgBubble {
-  background-color: #2563eb;
-  color: #ffffff;
-  border-bottom-right-radius: 2px;
+.msgRow.outgoing .msgBubble {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  border-bottom-right-radius: 4px;
 }
 
-.msgRow.msgRow.incoming .msgBubble {
-  background-color: #475569;
-  color: #f8fafc;
-  border-bottom-left-radius: 2px;
+.msgRow.incoming .msgBubble {
+  background-color: #151f32;
+  border-bottom-left-radius: 4px;
+  border: 1px solid #243552;
 }
 
 .msgMeta {
@@ -556,46 +591,43 @@ header h1 {
 }
 
 .msgActions {
-  display: none;
-  position: relative;
-  background: #1e293b;
-  border: 1px solid #334155;
+  display: flex;
+  gap: 0.25rem;
+  opacity: 0;
+  transition: opacity 0.2s steps(4, end);
+  background-color: #151f32;
+  border: 1px solid #243552;
   border-radius: 20px;
-  padding: 3px 6px;
-  gap: 2px;
-  align-items: center;
+  padding: 2px 6px;
+  position: absolute;
+  top: -24px;
   z-index: 10;
-  white-space: nowrap;
-  flex-shrink: 0;
 }
 
 .msgRow:hover .msgActions {
-  display: flex;
+  opacity: 1;
 }
 
 .msgRow.outgoing .msgActions {
-  order: -1;
-  margin-right: 6px;
+  right: 12px;
 }
 
 .msgRow.incoming .msgActions {
-  order: 1;
-  margin-left: 6px;
+  left: 12px;
 }
 
 .msgActionBtn {
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 14px;
-  padding: 3px 5px;
-  border-radius: 6px;
-  line-height: 1;
+  font-size: 0.85rem;
+  padding: 4px;
+  border-radius: 50%;
   transition: background 0.15s;
 }
 
 .msgActionBtn:hover {
-  background: #334155;
+  background: #243552;
 }
 
 .emojiPicker {
@@ -814,4 +846,64 @@ header h1 {
   color: #f8fafc;
   cursor: pointer;
   font-size: 0.85rem;
+}
+
+#alertContainer {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.alertCard {
+  min-width: 280px;
+  max-width: 360px;
+  background-color: #1e293b;
+  border-left: 4px solid #3b82f6;
+  color: #f8fafc;
+  padding: 1rem;
+  border-radius: 6px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: auto;
+  animation: slideInalert 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.alertCard.error {
+  border-left-color: #ef4444;
+}
+.alertCard.success {
+  border-left-color: #10b981;
+}
+.alertCard.warning {
+  border-left-color: #f59e0b;
+}
+
+@keyframes slideInalert {
+  from {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.alertFadeOut {
+  animation: slideOutalert 0.2s ease forwards !important;
+}
+
+@keyframes slideOutalert {
+  to {
+    transform: translateX(120%);
+    opacity: 0;
+  }
 }

@@ -77,6 +77,8 @@ let dataChannel = null;
 const voiceRecordBtn = document.getElementById("voiceRecordBtn");
 let mediaRecordInstance = null;
 let recordedAudioChunks = [];
+const EDIT_WINDOW_MS = 5 * 60 * 1000;
+let editingMsgId = null;
 
 function generateMsgId() {
   return crypto.randomUUID();
@@ -101,13 +103,16 @@ function renderMessage(
   msgId = null,
   replyTo = null,
   isAudio = false,
-  audioDataUrl = ""
+  audioDataUrl = "",
+  timestampMs = null
 ) {
   if(!msgId) msgId = generateMsgId();
+  const actualTimeStamp = timestampMs || Date.now();
 
   const rowEl = document.createElement("div");
   rowEl.classList.add("msgRow", direction);
   rowEl.dataset.msgId = msgId;
+  rowEl.dataset.timestamp = actualTimeStamp;
 
   const actionsEl = document.createElement("div");
   actionsEl.className = "msgActions";
@@ -130,6 +135,38 @@ function renderMessage(
 
   actionsEl.appendChild(reactBtn);
   actionsEl.appendChild(replyBtn);
+
+  if (direction === "outgoing" && !isAudio && !isImage) {
+    const editBtn = document.createElement("button");
+    editBtn.className = "msgActionBtn";
+    editBtn.textContent = "✏️";
+    editBtn.title = "Edit";
+    editBtn.addEventListener("click", () => {
+      const timeElasped = Date.now() - parseInt(rowEl.dataset.timestamp);
+      if(timeElasped > EDIT_WINDOW_MS) {
+        alert("Message can only be editted within 5 minutes of sending.");
+        return;
+      }
+      enterEditMode(msgId, text);
+    });
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "msgActionBtn";
+    deleteBtn.textContent = "🗑️";
+    deleteBtn.title = "Delete";
+    deleteBtn.addEventListener("click", ()=> {
+      const timeElasped = Date.now() - parseInt(rowEl.dataset.timestamp);
+      if(timeElasped > EDIT_WINDOW_MS) {
+        alert("Message can only be deleted within 5 minutes of sending.");
+        return;
+      }
+      if(confirm("Are you sure you want to delete this message?")) {
+        executeLocalDeletion(msgId);
+      }
+    });
+    actionsEl.appendChild(editBtn);
+    actionsEl.appendChild(deleteBtn);
+  }
+
   rowEl.appendChild(actionsEl);
 
   const bubbleEl = document.createElement("div");
@@ -163,9 +200,12 @@ function renderMessage(
     imageLink.appendChild(imageEl);
     bubbleEl.appendChild(imageLink);
   } else {
+    const contentContainer = document.createElement("div");
+    contentContainer.className = "msgContentContainer";
     const textNode = document.createElement("span");
-    textNode.textContent = text
-    bubbleEl.appendChild(textNode);
+    textNode.textContent = text;
+    contentContainer.appendChild(textNode);
+    bubbleEl.appendChild(contentContainer);
   }
   if (!timeStr) {
     const now = new Date();
@@ -202,6 +242,7 @@ function renderMessage(
     {
       rowEl,
       reactionBar,
+      contentContainer: bubbleEl.querySelector(".msgContentContainer") || bubbleEl,
       reactionsData: new Map(),
       text,
       tickEl: tickSpan,
@@ -350,6 +391,137 @@ function clearReplyContext() {
   replyPreviewText.textContent = "";
 }
 
+function enterEditMode(msgId, text) {
+  editingMsgId = msgId;
+  messageInputEl.value = text;
+  messageInputEl.focus();
+  messageForm.querySelector('button[type="submit"]').textContent = "Confirm Edit";
+
+  let cancelEditBtn = document.getElementById("cancelEditBtn");
+  if (!cancelEditBtn) {
+    cancelEditBtn = document.createElement("button");
+    cancelEditBtn.id = "cancelEditBtn";
+    cancelEditBtn.type = "button";
+    cancelEditBtn.textContent = "Cancel Edit";
+    cancelEditBtn.style.marginLeft = "4px";
+    cancelEditBtn.addEventListener("click", exitEditMode);
+    messageForm.appendChild(cancelEditBtn);
+  }
+}
+
+function exitEditMode() {
+  editingMsgId = null;
+  messageInputEl.value = "";
+  messageForm.querySelector('button[type="submit"]').textContent = "Send";
+  const cancelEditBtn = document.getElementById("cancelEditBtn");
+  if(cancelEditBtn) cancelEditBtn.remove();
+}
+
+async function executeLocalUpdate(msgId, newText, isRemoteCall = false) {
+  const item = messageMap.get(msgId);
+  if(!item) return;
+
+  item.text = newText;
+  item.contentContainer.innerHTML = "";
+  const newTextNode = document.createElement("span");
+  newTextNode.textContent = newText;
+  item.contentContainer.appendChild(newTextNode);
+
+  const editedIndicator = document.createElement("small");
+  editedIndicator.style.opacity = "0.5";
+  editedIndicator.style.fontSize = "0.75rem";
+  editedIndicator.style.marginLeft = "4px";
+  editedIndicator.textContent = "(edited)";
+  item.contentContainer.appendChild(editedIndicator);
+
+  await modifyStorageRecord(msgId, (record) => {
+    record.text = newText;
+    record.isEdited = true;
+    return record;
+  });
+
+  if(!isRemoteCall && dataChannel && dataChannel.readyState === "open" && chatSession.ackKey) {
+    try {
+      const payload = {
+        type: "EDIT_MESSAGE",
+        targetMsgId: msgId,
+        newText
+      };
+      const encrypted = await encryptText(JSON.stringify(payload), chatSession.ackKey);
+      dataChannel.send(JSON.stringify({
+        type: "EDIT_MESSAGE",
+        iv: encrypted.iv,
+        ciphertext: encrypted.ciphertext
+      }));
+    } catch (e) {
+      console.error("Failed sending message update message: ", e);
+    }
+  }
+}
+
+async function executeLocalDeletion(msgId,isRemoteCall=false) {
+  const item = messageMap.get(msgId);
+  if(!item) return;
+
+  item.contentContainer.innerHTML = "";
+  const deletionNode = document.createElement("span");
+  deletionNode.style.fontStyle = "italic";
+  deletionNode.style.opacity = "0.4";
+  deletionNode.textContent = isRemoteCall ? "Peer Deleted this Message" : "You deleted this message";
+  item.contentContainer.appendChild(deletionNode);
+
+  const actionsContainer = item.rowEl.querySelector(".msgActions");
+  if(actionsContainer) actionsContainer.remove();
+
+  await modifyStorageRecord(msgId, (record)=>{
+    record.text = "This Message Was Deleted!";
+    record.isDeleted = true;
+    return record;
+  })
+
+  if(!isRemoteCall && dataChannel && dataChannel.readyState === "open" && chatSession.ackKey) {
+    try {
+      const payload = {
+        type: "DELETE_MESSAGE",
+        targetMsgId: msgId
+      };
+      const encrypted = await encryptText(JSON.stringify(payload), chatSession.ackKey);
+      dataChannel.send(JSON.stringify({
+        type: "DELETE_MESSAGE",
+        iv: encrypted.iv,
+        ciphertext: encrypted.ciphertext
+      }));
+    } catch (error) {
+      console.error("Failed sending message deletion message: ", error);
+    } 
+  }
+}
+
+async function modifyStorageRecord(msgId, updateCallBack) {
+  try {
+    const rawSavedHistory = JSON.parse(localStorage.getItem("javault_history") || "[]");
+    const structuralArray = [];
+    for (const msgPkg of rawSavedHistory) {
+      try {
+        const decryptedJSON = await decryptText(msgPkg.ciphertext, msgPkg.iv, masterStorageKey);
+        let record = JSON.parse(decryptedJSON);
+
+        if(record.msgId === msgId) {
+          record = updateCallBack(record);
+        }
+
+        const encryptedPkg = await encryptText(JSON.stringify(record), masterStorageKey);
+        structuralArray.push(encryptedPkg);
+      } catch (error) {
+        structuralArray.push(msgPkg)
+      }
+    }
+    localStorage.setItem("javault_history", JSON.stringify(structuralArray));
+  } catch (err) {
+    console.error("Error writing update data to local storage: ", err);
+  }
+}
+
 cancelReplyBtn.addEventListener("click", clearReplyContext);
 
 function updateStatusUI(state) {
@@ -396,6 +568,12 @@ messageForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const plainText = messageInputEl.value.trim();
   if (!plainText) return;
+
+  if(editingMsgId !== null) {
+    await executeLocalUpdate(editingMsgId, plainText);
+    exitEditMode();
+    return;
+  }
 
   const msgId = generateMsgId();
   const currentReply = replyContext ? {...replyContext} : null;
@@ -486,7 +664,7 @@ async function loadAndDecryptHistory() {
 
       chatSession.history.push(record.text);
       renderMessage(
-        record.text,
+        record.isDeleted ? "The Message was Deleted" : record.text,
         record.direction || "outgoing",
         displayTime,
         record.isImage || false,
@@ -494,8 +672,28 @@ async function loadAndDecryptHistory() {
         record.msgId || null,
         record.replyTo || null,
         record.isAudio || false,
-        record.fileData || ""
+        record.fileData || "",
+        record.timestamp || null
       );
+
+      if(record.msgId && (record.isEdited || record.isDeleted)) {
+        const item = messageMap.get(record.msgId);
+        if(item) {
+          if(record.isDeleted) {
+            item.contentContainer.innerHTML = `<span style="font-style: italic; opacity: 0.4;">${record.direction === "outgoing" ? "You Deleted this message." : "Peer deleted this message"}</span>`;
+            const act = item.rowEl.querySelector(".msgActions");
+            if(act) act.remove();
+          }
+          else if(record.isEdited) {
+            const ind = document.createElement("small");
+            ind.style.opacity = "0.5";
+            ind.style.fontSize = "0.75rem";
+            ind.style.marginLeft = "4px";
+            ind.textContent = "(edited)";
+            item.contentContainer.appendChild(ind);
+          }
+        }
+      }
     } catch (error) {
       console.error("Decryption Failed", error);
     }
@@ -678,6 +876,23 @@ async function executeAutomatedKeyExchange() {
 async function handleIncomingMsg(rawWireDate) {
   try {
     const parsedFrame = JSON.parse(rawWireDate);
+
+    if(parsedFrame && (parsedFrame.type === "EDIT_MESSAGE" || parsedFrame.type === "DELETE_MESSAGE") && chatSession.ackKey) {
+      try {
+        const decrypted = await decryptText(parsedFrame.ciphertext, parsedFrame.iv, chatSession.ackKey);
+        const actionData = JSON.parse(decrypted);
+
+        if(parsedFrame.type === "EDIT_MESSAGE") {
+          await executeLocalUpdate(actionData.targetMsgId, actionData.newText, true);
+        }
+        else if (parsedFrame.type === "DELETE_MESSAGE") {
+          await executeLocalDeletion(actionData.targetMsgId, true);
+        }
+      } catch (error) {
+        console.error("Failed handling incoming system frame update details: ", error);
+      }
+      return;
+    }
 
     if (parsedFrame && parsedFrame.type === "TYPING_SIGNAL" && chatSession.ackKey) {
       try {

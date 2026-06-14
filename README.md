@@ -30,3 +30,8 @@
 7. Start Chatting :)
 
 #### Screenshots:
+<img width="1919" height="853" alt="Screenshot 2026-06-14 142101" src="https://github.com/user-attachments/assets/4cf96ea0-2c23-419e-81a2-872f8055981a" />
+<img width="1919" height="856" alt="Screenshot 2026-06-14 142037" src="https://github.com/user-attachments/assets/c01e41a1-2140-41aa-a734-40067ae17be7" />
+<img width="1914" height="865" alt="Screenshot 2026-06-14 142024" src="https://github.com/user-attachments/assets/4275db87-c587-4250-bf12-5c47ea6f95e7" />
+<img width="1919" height="856" alt="Screenshot 2026-06-14 141953" src="https://github.com/user-attachments/assets/66d218e4-f0ff-4997-a9c5-0cf6d386ae22" />
+<img width="1916" height="850" alt="Screenshot 2026-06-14 141917" src="https://github.com/user-attachments/assets/566565e9-8d43-46f1-8d1c-7ca0a182ae3d" />

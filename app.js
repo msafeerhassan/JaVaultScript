@@ -1,3 +1,4 @@
+// import { act } from "react";
 import {
   deriveKeyFromPhrase,
   encryptText,
@@ -83,6 +84,101 @@ const EDIT_WINDOW_MS = 5 * 60 * 1000;
 let editingMsgId = null;
 const historySearchInput = document.getElementById("historySearchInput");
 const exportHistoryBtn = document.getElementById("exportHistoryBtn");
+const DRAFT_KEY = "javault_msg_draft";
+const PINNED_KEY = "javault_pinned_msgs";
+let pinnedMessages = [];
+
+function savePinnedMessages() {
+  localStorage.setItem(PINNED_KEY, JSON.stringify(pinnedMessages));
+}
+
+function loadPinnedMessages() {
+  try {
+    const stored = localStorage.getItem(PINNED_KEY);
+    pinnedMessages = stored ? JSON.parse(stored) : [];
+  } catch {
+    pinnedMessages = [];
+  }
+}
+
+function renderPinnedBar() {
+  const pinnedBar = document.getElementById("pinnedBar");
+  const pinnedList = document.getElementById("pinnedList");
+  pinnedList.innerHTML = "";
+
+  if(pinnedMessages.length === 0) {
+    pinnedBar.classList.add("hidden");
+    return;
+  }
+
+  pinnedBar.classList.remove("hidden");
+
+  pinnedMessages.forEach(({msgId, text}) => {
+    const entry = document.createElement("div");
+    entry.className = "pinnedEntry";
+
+    const label = document.createElement("span");
+    label.className = "pinnedEntryText";
+    label.textContent = text.length > 60 ? text.slice(0,60) + "..." : text;
+    label.addEventListener("click", ()=> {
+      const target = chatLog.querySelector(`[data-msg-id="${msgId}"]`);
+      if(target) {
+        target.scrollIntoView({
+          behavior: "smooth",
+          block: "center"
+        });
+        target.querySelector(".msgBubble").classList.add("isPinned");
+      }
+      else {
+        showNotification("Message not found in current session.", "warning");
+      }
+    });
+    const unpinBtn = document.createElement("button");
+    unpinBtn.className = "unpinBtn";
+    unpinBtn.textContent = "x";
+    unpinBtn.title = "Unpin";
+    unpinBtn.addEventListener("click", (e)=>{
+      e.stopPropagation();
+      unpinMessage(msgId);
+    });
+    entry.appendChild(label);
+    entry.appendChild(unpinBtn);
+    pinnedList.appendChild(entry);
+  });
+}
+
+function pinMessage(msgId, text) {
+  if(pinnedMessages.length >= 3) {
+    showNotification("Maximum 3 messages can be pinned. Unpin anyone first.", "warning");
+    return;
+  }
+  if(pinnedMessages.find(p => p.msgId === msgId)) {
+    showNotification("Aleady Pinned.", "info");
+    return;
+  }
+
+  pinnedMessages.push({
+    msgId,
+    text
+  });
+  savePinnedMessages();
+  renderPinnedBar();
+
+  const target = chatLog.querySelector(`[data-msg-id="${msgId}"]`);
+  if(target) target.querySelector(".msgBubble").classList.add("isPinned");
+  showNotification("Message Pinned.", "success");
+}
+
+function unpinMessage(msgId) {
+  pinnedMessages = pinnedMessages.filter(p => p.msgId !== msgId);
+  savePinnedMessages();
+  renderPinnedBar();
+
+  const target = chatLog.querySelector(`[data-msg-id="${msgId}"]`);
+  if(target) target.querySelector(".msgBubble").classList.remove("isPinned");
+
+  showNotification("Message Unpinned.", "info");
+}
 
 function showNotification(message, type="info") {
   const container = document.getElementById("alertContainer");
@@ -163,8 +259,17 @@ function renderMessage(
     setReplyContext(msgId, text);
   })
 
+  const pinBtn = document.createElement("button");
+  pinBtn.className = "msgActionBtn";
+  pinBtn.textContent = "📌";
+  pinBtn.title = "Pin";
+  pinBtn.addEventListener("click", () => {
+    pinMessage(msgId, text);
+  });
+
   actionsEl.appendChild(reactBtn);
   actionsEl.appendChild(replyBtn);
+  actionsEl.appendChild(pinBtn);
 
   if (direction === "outgoing" && !isAudio && !isImage) {
     const editBtn = document.createElement("button");
@@ -586,6 +691,13 @@ masterPhraseForm.addEventListener("submit", async (event) => {
       );
       splashWall.classList.add("hidden");
       mainApp.classList.remove("hidden");
+      const savedDraft = localStorage.getItem(DRAFT_KEY);
+      if(savedDraft) {
+        messageInputEl.value = savedDraft;
+        showNotification("Draft message restored.", "info");
+      }
+      loadPinnedMessages();
+      renderPinnedBar();
       await loadAndDecryptHistory();
       showNotification("JaVaultScript Login Successful!", "success");
     } catch (error) {
@@ -665,6 +777,7 @@ messageForm.addEventListener("submit", async (event) => {
     }
 
     messageInputEl.value = "";
+    localStorage.removeItem(DRAFT_KEY);
   } catch (e) {
     console.error("Encryption Crash: ", e);
   }
@@ -824,6 +937,9 @@ lockBtn.addEventListener("click", () => {
   if(historySearchInput) historySearchInput.value = "";
 
   if (peerConnection) {
+    localStorage.removeItem(DRAFT_KEY);
+    pinnedMessages = [];
+    renderPinnedBar();
     peerConnection.close();
     peerConnection = null;
   }
@@ -2044,6 +2160,16 @@ document.getElementById("copyOfferBtn").addEventListener("click", () => {
     showNotification("SDP Code copied to clipboard.", "success");
   }).catch(()=> showNotification("Copy failed. Select and Copy Manually", "error"));
 });
+
+messageInputEl.addEventListener("input", ()=> {
+  const val = messageInputEl.value;
+  if(val.trim()) {
+    localStorage.setItem(DRAFT_KEY, val);
+  }
+  else {
+    localStorage.removeItem(DRAFT_KEY);
+  }
+})
 
 voiceRecordBtn.addEventListener("mousedown", (e)=> {
   e.preventDefault();

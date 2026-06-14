@@ -25,6 +25,8 @@ import {
 let chatSession = {
   sendChainKey: null,
   recvChainKey: null,
+  ackKey: null,
+  key: null,
   history: [],
 };
 
@@ -172,7 +174,7 @@ function renderMessage(
     editBtn.addEventListener("click", () => {
       const timeElasped = Date.now() - parseInt(rowEl.dataset.timestamp);
       if(timeElasped > EDIT_WINDOW_MS) {
-        alert("Message can only be editted within 5 minutes of sending.");
+        showNotification("Message can only be editted within 5 minutes of sending.", "warning");
         return;
       }
       enterEditMode(msgId, text);
@@ -184,7 +186,7 @@ function renderMessage(
     deleteBtn.addEventListener("click", ()=> {
       const timeElasped = Date.now() - parseInt(rowEl.dataset.timestamp);
       if(timeElasped > EDIT_WINDOW_MS) {
-        alert("Message can only be deleted within 5 minutes of sending.");
+        showNotification("Message can only be deleted within 5 minutes of sending.", "warning");
         return;
       }
       if(confirm("Are you sure you want to delete this message?")) {
@@ -237,7 +239,7 @@ function renderMessage(
   }
   if (!timeStr) {
     const now = new Date();
-    timeStr = now.toLocaleDateString([], {
+    timeStr = now.toLocaleString([], {
       hour: "2-digit",
       minute: "2-digit",
     });
@@ -571,7 +573,7 @@ masterPhraseForm.addEventListener("submit", async (event) => {
   const userMasterPhrase = masterPhraseInput.value.trim();
   if(!userMasterPhrase) return;
 
-  if(userMasterPhrase < 8) {
+  if(userMasterPhrase.length < 8) {
     showNotification("The master phrase must be atleast 8 characters long.", "warning");
     return;
   }
@@ -688,7 +690,7 @@ async function loadAndDecryptHistory() {
       let displayTime = "";
 
       if (record.timestamp) {
-        displayTime = new Date(record.timestamp).toLocaleDateString([], {
+        displayTime = new Date(record.timestamp).toLocaleString([], {
           hour: "2-digit",
           minute: "2-digit",
         });
@@ -994,9 +996,9 @@ async function executeAutomatedKeyExchange() {
   }
 }
 
-async function handleIncomingMsg(rawWireDate) {
+async function handleIncomingMsg(rawWireData) {
   try {
-    const parsedFrame = JSON.parse(rawWireDate);
+    const parsedFrame = JSON.parse(rawWireData);
 
     if(parsedFrame && (parsedFrame.type === "EDIT_MESSAGE" || parsedFrame.type === "DELETE_MESSAGE") && chatSession.ackKey) {
       try {

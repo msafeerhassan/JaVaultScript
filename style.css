@@ -20,15 +20,15 @@ body {
 }
 
 header {
-  /* position: relative; */
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.85rem 1.5rem;
+  padding: 0.75rem 1.5rem;
   background-color: #151f32;
   border-bottom: 1px solid #243552;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 .headerTitleContainer {
@@ -168,6 +168,13 @@ header h1 {
   border: 1px solid #334155;
 }
 
+@media (max-width: 640px) {
+  .signalingGrid {
+    grid-template-columns: 1fr;
+    max-height: 55vh;
+  }
+}
+
 .gridColum {
   display: flex;
   flex-direction: column;
@@ -245,11 +252,16 @@ header h1 {
 #messageForm {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
   margin: 0;
-  padding: 1rem 1.5rem;
+  padding: 0.75rem 1rem;
   background-color: #151f32;
   border-top: 1px solid #243552;
+  flex-wrap: nowrap;
+}
+
+#messageForm input[type="submit"] {
+  flex-shrink: 0;
 }
 
 #messageForm input[type="text"] {
@@ -311,11 +323,20 @@ header h1 {
 }
 
 .msgBubble {
-  max-width: 65%;
+  position: relative;
+  max-width: min(65%, 480px);
   padding: 0.75rem 1.1rem;
   border-radius: 18px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   transition: transform 0.1s ease;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+@media (max-width: 480px) {
+  .msgBubble {
+    max-width: 82%;
+  }
 }
 
 .msgRow.outgoing .msgBubble {
@@ -853,7 +874,7 @@ header h1 {
   color: #f8fafc;
   font-size: 0.85rem;
   min-width: 0;
-  width: 160px;
+  width: clamp(100px, 20vw, 180px);
 }
 
 #exportHistoryBtn {
@@ -923,5 +944,44 @@ header h1 {
   to {
     transform: translateX(120%);
     opacity: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .localVideoCanvas {
+    width: 110px;
+    height: 70px;
+    bottom: 12px;
+    right: 12px;
+  }
+  .callControls {
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 1rem;
+  }
+  .controlCircleBtn {
+    padding: 0.6rem 1rem;
+    font-size: 0.85rem;
+  }
+  .videoCanvasContainer {
+    width: 100%;
+    height: 55vh;
+  }
+  .splashCard {
+    padding: 1.5rem;
+    margin: 1rem;
+  }
+  header h1 {
+    font-size: 1rem;
+  }
+  .alertCard {
+    min-width: 220px;
+    max-width: calc(100vw-40px);
+  }
+  #alertContainer {
+    right: 10px;
+    left: 10px;
+    top: 10px;
   }
 }

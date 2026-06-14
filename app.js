@@ -180,6 +180,77 @@ function unpinMessage(msgId) {
   showNotification("Message Unpinned.", "info");
 }
 
+function extractUrl(text) {
+  const URlRegex = /(https?:\/\/[^\s]+)/g;
+  const matches = text.match(URlRegex);
+  return matches ? matches[0] : null;
+}
+
+async function fetchLinkPreview(url) {
+  try {
+    const proxyUrl = `https://api.microlink.io/?url=${encodeURIComponent(url)}`;
+    const res = await fetch(proxyUrl);
+    if(!res.ok) return null;
+    const data = await res.json();
+    if(data.status !== "success") return null;
+
+    const {title, description, image, publisher} = data.data;
+
+    return {
+      title: title || null,
+      description: description || null,
+      image: image?.url || null,
+      siteName: publisher || new URL(url).hostname.replace("www.", ""),
+      url,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function renderLinkPreviewCard(preview, bubbleEl) {
+  const card = document.createElement("a");
+  card.href = preview.url;
+  card.target = "_blank";
+  card.rel = "noopener noreferrer";
+  card.className = "linkPreviewCard";
+
+  if(preview.image) {
+    const img = document.createElement("img");
+    img.src = preview.image;
+    img.alt = preview.title || "";
+    img.className = "linkPreviewImage";
+    img.onerror = () => img.remove();
+    card.appendChild(img);
+  }
+  const textBlock = document.createElement("div");
+  textBlock.className = "linkPreviewText";
+
+  if(preview.siteName) {
+    const site = document.createElement("span");
+    site.className = "linkPreviewSite";
+    site.textContent = preview.siteName;
+    textBlock.appendChild(site);
+  }
+
+  if(preview.title) {
+    const title = document.createElement("p");
+    title.className = "linkPreviewTitle";
+    title.textContent = preview.title;
+    textBlock.appendChild(title);
+  }
+
+  if(preview.description) {
+    const desc = document.createElement("p");
+    desc.className = "linkPreviewDesc";
+    desc.textContent = preview.description.length > 120 ? preview.description.slice(0, 120) + "..." : preview.description;
+    textBlock.appendChild(desc);
+  }
+
+  card.appendChild(textBlock);
+  bubbleEl.appendChild(card);
+}
+
 function showNotification(message, type="info") {
   const container = document.getElementById("alertContainer");
   if(!container) return;
@@ -341,6 +412,21 @@ function renderMessage(
     textNode.textContent = text;
     contentContainer.appendChild(textNode);
     bubbleEl.appendChild(contentContainer);
+
+    const detectedUrl = extractUrl(text);
+    if(detectedUrl) {
+      const previewPlaceholder = document.createElement("div");
+      previewPlaceholder.className = "linkPreviewLoading";
+      previewPlaceholder.textContent = "Loading preview...";
+      bubbleEl.appendChild(previewPlaceholder);
+
+      fetchLinkPreview(detectedUrl).then((preview) => {
+        previewPlaceholder.remove();
+        if(preview) {
+          renderLinkPreviewCard(preview, bubbleEl);
+        }
+      })
+    }
   }
   if (!timeStr) {
     const now = new Date();

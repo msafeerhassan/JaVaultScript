@@ -16,9 +16,12 @@
 9. Code well-organised and structured.
 10. React and Reply to specific messages
 11. Interactive Animations and Styling
+12. Message Pinning Option
+13. Message Editing and Deletion
+14. Special Link Preview
 
 #### How to use it?
-1. Go over to []()
+1. Go over to [JaVaultScript Demo]()
 2. Enter a master password.
 3. Generate a Local SDP/QR Code.
 4. Share it with the peer - he must enter it/scan it and accept connection.

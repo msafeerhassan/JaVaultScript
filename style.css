@@ -1178,3 +1178,62 @@ header h1 {
 .msgBubble.isPinned {
   outline: 1px solid rgba(255, 200, 0, 0.35);
 }
+
+.linkPreviewLoading {
+  font-size: 0.75rem;
+  opacity: 0.4;
+  padding: 0.4rem 0;
+}
+
+.linkPreviewCard {
+  flex-direction: column;
+  margin-top: 0.5rem;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #333;
+  background: #1a1a2e;
+  text-decoration: none;
+  color: inherit;
+  transition: opacity 0.15s;
+  max-width: 280px;
+}
+
+.linkPreviewCard:hover {
+  opacity: 0.85;
+}
+
+.linkPreviewImage {
+  width: 100%;
+  max-height: 140px;
+  object-fit: cover;
+  display: block;
+}
+
+.linkPreviewText {
+  padding: 0.5rem 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.linkPreviewSite {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05rem;
+  opacity: 0.5;
+}
+
+.linkPreviewTitle {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: #eee;
+}
+
+.linkPreviewDesc {
+  margin: 0;
+  font-size: 0.75rem;
+  opacity: 0.6;
+  line-height: 1.4;
+}

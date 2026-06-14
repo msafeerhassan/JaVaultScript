@@ -20,6 +20,7 @@ body {
 }
 
 header {
+  /* position: relative; */
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -27,15 +28,18 @@ header {
   background-color: #151f32;
   border-bottom: 1px solid #243552;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  flex-wrap: nowrap;
 }
 
-/* .headerTitleContainer {
+.headerTitleContainer {
   display: flex;
   align-items: center;
-  gap: 1.5rem;
-} */
+  gap: 1rem;
+  flex-shrink: 0;
+}
 
 header h1 {
+  margin: 0;
   font-size: 1.25rem;
   font-weight: 700;
   letter-spacing: -0.025rem;
@@ -152,7 +156,7 @@ header h1 {
 
 .signalingGrid {
   flex-shrink: 0;
-  /* max-height: 35vh; */
+  max-height: 38vh;
   overflow-y: auto;
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -210,7 +214,7 @@ header h1 {
 }
 
 #chatLog {
-  flex-grow: 1 1 0%;
+  flex: 1 1 0%;
   min-height: 0;
   height: auto;
   overflow-y: auto;
@@ -283,6 +287,8 @@ header h1 {
   border: none;
   font-weight: 600;
   cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 #lockBtn:hover {
@@ -509,6 +515,12 @@ header h1 {
   gap: 1.5rem;
 }
 
+.callControls {
+  margin-top: 2rem;
+  display: flex;
+  gap: 1.5rem;
+}
+
 .controlCircleBtn {
   background-color: #334155;
   border: 1px solid #475569;
@@ -525,12 +537,12 @@ header h1 {
   transform: translateY(-2px);
 }
 
-.hangUpBtn {
+.hangUpBtn, #endCallBtn {
   background-color: #ef4444 !important;
   border-color: #dc2626 !important;
 }
 
-.hangUpBtn:hover {
+.hangUpBtn:hover, #endCallBtn:hover {
   background-color: #dc2626 !important;
 }
 
@@ -572,6 +584,9 @@ header h1 {
 }
 
 #initiateCallBtn {
+  /* position: absolute;
+  top: 0.85rem;
+  right: 8rem; */
   background-color: #10b981;
   color: #f8fafc;
   border: none;
@@ -579,6 +594,7 @@ header h1 {
   border-radius: 6px;
   font-weight: 600;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 #initiateCallBtn:hover {
@@ -825,8 +841,8 @@ header h1 {
   display: flex;
   gap: 0.5rem;
   align-items: center;
-  margin-left: auto;
-  margin-right: 1rem;
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 #historySearchInput {
@@ -836,6 +852,8 @@ header h1 {
   background-color: #0f172a;
   color: #f8fafc;
   font-size: 0.85rem;
+  min-width: 0;
+  width: 160px;
 }
 
 #exportHistoryBtn {

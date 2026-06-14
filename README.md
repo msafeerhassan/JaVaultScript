@@ -21,7 +21,7 @@
 14. Special Link Preview
 
 #### How to use it?
-1. Go over to [JaVaultScript Demo]()
+1. Go over to [JaVaultScript Demo](https://msafeerhassan.github.io/JaVaultScript/)
 2. Enter a master password.
 3. Generate a Local SDP/QR Code.
 4. Share it with the peer - he must enter it/scan it and accept connection.

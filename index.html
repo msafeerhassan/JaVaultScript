@@ -75,15 +75,17 @@
       <section id="signalingGrid" class="signalingGrid">
         <div class="gridColum">
           <h3>Local Configuration</h3>
-          <button id="genOfferBtn">1. Generate Connection Offer</button>
-          <label for="localSdpTextArea">Your Local SDP (Copy this): </label>
+          <button id="genOfferBtn">Generate Connection Offer</button>
+          <label for="localSdpTextArea">Your Local SDP: </label>
           <textarea
             readonly
             placeholder="Click generate to create local connection offer...."
             id="localSdpTextArea"
           ></textarea>
           <div class="qrContainer">
+            <p class="qrLabel">Scan with Peer's Camera</p>
             <canvas id="localQrCanvas"></canvas>
+            <button id="copyOfferBtn" class="qrCopyBtn" type="button">Copy SDP Code</button>
           </div>
         </div>
 
@@ -96,7 +98,7 @@
           ></textarea>
           <button id="scanRemoteQrBtn">Scan Remote QR Code via Camera</button>
           <button id="acceptRemoteBtn">
-            2. Accept Remote Peer Connection Request
+            Accept Remote Peer Connection Request
           </button>
         </div>
       </section>

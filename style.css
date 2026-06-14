@@ -410,22 +410,53 @@ header h1 {
 
 .qrContainer {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
   align-items: center;
+  gap: 0.6rem;
   margin-top: 1rem;
-  padding: 0.75rem;
-  background-color: #ffffff;
-  border-radius: 8px;
+  padding: 1rem;
+  background-color: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 12px;
   width: fit-content;
   margin-left: auto;
   margin-right: auto;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.qrLabel {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  letter-spacing: 0.03em;
 }
 
 #localQrCanvas {
-  width: 200px;
-  height: 200px;
+  width: 180px;
+  height: 180px;
   display: block;
+  border-radius: 8px;
+  padding: 8px;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.qrCopyBtn {
+  padding: 0.4rem 1rem;
+  background-color: #1e293b;
+  border: 1px solid #475569;
+  border-radius: 20px;
+  color: #94a3b8;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 100%;
+}
+
+.qrCopyBtn:hover {
+  background-color: #334155;
+  color: #f8fafc;
+  border-color: #60a5fa;
 }
 
 #scanRemoteQrBtn {
@@ -810,7 +841,7 @@ header h1 {
 }
 
 .tick.read {
-  color: #f59e0b !important;
+  color: #60a5fa !important;
 }
 
 .voiceBtn {
@@ -984,4 +1015,87 @@ header h1 {
     left: 10px;
     top: 10px;
   }
+}
+
+.incomingCallPrompt {
+  position: fixed;
+  inset: 0;
+  background: rgba(11, 17, 30, 0.85);
+  z-index: 5000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.incomingCallCard {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 16px;
+  padding: 2.5rem 2rem;
+  text-align: center;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  min-width: 260px;
+}
+
+.callRingIcon {
+  font-size: 3rem;
+  animation: ringBounce 0.6s infinite alternate;
+}
+
+@keyframes ringBounce {
+  from {
+    transform: rotate(-15deg) scale(1);
+  }
+  to {
+    transform: rotate(15deg) scale(1.15);
+  }
+}
+
+.callRingText {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.callPromptBtns {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.acceptCallBtn {
+  padding: 0.65rem 1.5rem;
+  background: #10b981;
+  color: #fff;
+  border: none;
+  border-radius: 24px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.acceptCallBtn:hover {
+  background: #059669;
+}
+
+.rejectCallBtn {
+  padding: 0.65rem 1.5rem;
+  background: #ef4444;
+  color: #fff;
+  border: none;
+  border-radius: 24px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.rejectCallBtn:hover {
+  background: #dc2626;
 }

@@ -996,6 +996,59 @@ async function executeAutomatedKeyExchange() {
   }
 }
 
+function showIncomingCallPrompt(remoteSdp) {
+  const existing = document.getElementById("incomingCallPrompt");
+  if(existing) existing.remove();
+
+  const prompt = document.createElement("div");
+  prompt.id = "incomingCallPrompt";
+  prompt.className = "incomingCallPrompt";
+  prompt.innerHTML = `
+    <div class="incomingCallCard">
+  <div class="callRingIcon">📞</div>
+  <p class="callRingText">Incoming Video Call</p>
+  <div class="callPromptBtns">
+    <button id="acceptCallBtn" class="acceptCallBtn">Accept</button>
+    <button id="rejectCallBtn" class="rejectCallBtn">Decline</button>
+  </div>
+</div>
+  `;
+
+  document.body.appendChild(prompt);
+
+  document.getElementById("rejectCallBtn").addEventListener("click", ()=> {
+    prompt.remove();
+    sendCallTerminationMsg();
+  });
+  document.getElementById("acceptCallBtn").addEventListener("click", async ()=> {
+    prompt.remove();
+    try {
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(remoteSdp));
+      localMediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: true
+      });
+      localVideoEl.srcObject = localMediaStream;
+      localMediaStream.getTracks().forEach(track => peerConnection.addTrack(track, localMediaStream));
+      const ansDesc = await peerConnection.createAnswer();
+      await peerConnection.setLocalDescription(ansDesc);
+
+      await transmitCallSignal({
+        subtype: "MEDIA_ANSWER",
+        sdp: {
+          type: peerConnection.localDescription.type,
+          sdp: peerConnection.localDescription.sdp,
+        }
+      });
+      callOverlay.classList.remove("hidden");
+    } catch (error) {
+      console.err("Failed to accept call: ", error);
+      showNotification("Could not access Camera/Microphone", "error");
+      sendCallTerminationMsg();
+    }
+  })
+}
+
 async function handleIncomingMsg(rawWireData) {
   try {
     const parsedFrame = JSON.parse(rawWireData);
@@ -1226,6 +1279,7 @@ async function handleIncomingMsg(rawWireData) {
         name: parsedFrame.name,
         mimeType: parsedFrame.mimeType,
         totalChunks: parsedFrame.totalChunks,
+        fileMsgId: parsedFrame.fileMsgId || null,
         receivedCount: 0,
         chunks: new Array(parsedFrame.totalChunks),
       });
@@ -1268,6 +1322,23 @@ async function handleIncomingMsg(rawWireData) {
       if(fileContext.receivedCount !== fileContext.totalChunks) {
         console.error(`${fileContext.name} incomplete!`);
         renderMessage(`File Transfer Incomplete: ${fileContext.name}`, "incoming", "");
+        if(fileContext.fileMsgId && dataChannel && dataChannel.readyState === "open" && chatSession.ackKey) {
+          try {
+            const ack = {
+              type: "MSG_ACK",
+              status: document.hasFocus() ? "read" : "delivered",
+              msgId: fileContext.fileMsgId
+            };
+            const encryptedAck = await encryptText(JSON.stringify(ack), chatSession.ackKey);
+            dataChannel.send(JSON.stringify({
+              type: "MSG_ACK",
+              iv: encryptedAck.iv,
+              ciphertext: encryptedAck.ciphertext
+            }));
+          } catch (e) {
+            console.warn("File ACK failed: ", e);
+          }
+        }
         incomingFileMap.delete(parsedFrame.fileId);
         return;
       }
@@ -1343,6 +1414,23 @@ async function handleIncomingMsg(rawWireData) {
         bubbleEl.insertBefore(downloadLink, bubbleEl.querySelector(".msgMeta"));
       }
 
+      if(fileContext.fileMsgId && dataChannel && dataChannel.readyState === "open" && chatSession.ackKey) {
+        try {
+          const ack = {
+            type: "MSG_ACK",
+            status: document.hasFocus() ? "read" : "delivered",
+            msgId: fileContext.fileMsgId
+          };
+          const encryptedAck = await encryptText(JSON.stringify(ack), chatSession.ackKey);
+          dataChannel.send(JSON.stringify({
+            type: "MSG_ACK",
+            iv: encryptedAck.iv,
+            ciphertext: encryptedAck.ciphertext
+          }));
+        } catch (error) {
+          console.warn("File ack failed: ", error);
+        }
+      }
       incomingFileMap.delete(parsedFrame.fileId);
       return;
     }
@@ -1354,38 +1442,16 @@ async function handleIncomingMsg(rawWireData) {
       const signalData = JSON.parse(decryptedSignalJson);
 
       if(signalData.subtype === "MEDIA_OFFER") {
-        console.log("Processing inbound call request!");
-        const acceptCall = confirm("Inbound Video Call Request Recieved! Accept?");
-        if(!acceptCall) {
-          sendCallTerminationMsg();
-          return;
-        }
-
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(signalData.sdp));
-        localMediaStream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-          video: true
-        });
-        localVideoEl.srcObject = localMediaStream;
-
-        localMediaStream.getTracks().forEach(track => {
-          peerConnection.addTrack(track, localMediaStream);
-        });
-
-        const ansDesc = await peerConnection.createAnswer();
-        await peerConnection.setLocalDescription(ansDesc);
-
-        await transmitCallSignal({
-          subtype: "MEDIA_ANSWER",
-          sdp: peerConnection.localDescription
-        });
-
-        callOverlay.classList.remove("hidden");
+        console.log("Processing inbound Call Request!");
+        showIncomingCallPrompt(signalData.sdp);
       }
 
       else if(signalData.subtype === "MEDIA_ANSWER") {
         console.log("Remote Peer Accepted Calling Session");
         await peerConnection.setRemoteDescription(new RTCSessionDescription(signalData.sdp));
+        if(localMediaStream) {
+          callOverlay.classList.remove("hidden");
+        }
       }
       else if (signalData.subtype === "MEDIA_HANGUP") {
         console.log("Remote Media Session Terminated");
@@ -1413,11 +1479,13 @@ async function transferEncryptedFile(file) {
 
   const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
   const fileId = crypto.randomUUID();
+  const fileMsgId = generateMsgId();
 
   dataChannel.send(
     JSON.stringify({
       type: "FILE_START",
       fileId: fileId,
+      fileMsgId: fileMsgId,
       name: file.name,
       mimeType: file.type,
       totalChunks: totalChunks,
@@ -1481,7 +1549,8 @@ async function transferEncryptedFile(file) {
           const base64Reader = new FileReader();
           base64Reader.onloadend = async () => {
             const base64DataUrl = base64Reader.result;
-            renderMessage(file.name, "outgoing", "", true, base64DataUrl);
+            // const fileMsgId = generateMsgId();
+            renderMessage(file.name, "outgoing", "", true, base64DataUrl, fileMsgId);
             try {
               const historyPayload = {
                 text: file.name,
@@ -1508,7 +1577,8 @@ async function transferEncryptedFile(file) {
           };
           base64Reader.readAsDataURL(file);
         } else {
-          renderMessage(`Successfully Sent: ${file.name}`, "outgoing", "");
+          // const fileMsgId = generateMsgId();
+          renderMessage(`Successfully Sent: ${file.name}`, "outgoing", "", false, "", fileMsgId);
         }
       }
     } catch (error) {
@@ -1703,6 +1773,13 @@ async function transmitCallSignal(payLoadData) {
 }
 
 async function startPeerVoiceVideoCall() {
+  if(!peerConnection || peerConnection.connectionState !== "connected") {
+    showNotification("Cannot Call! No Active Peer Connection", "warning");
+    return;
+  }
+  if(!dataChannel || dataChannel.readyState !== "open" || !chatSession.ackKey) {
+    showNotification("Cannot Call! Secure Channel not initialized Yet.", "warning");
+  }
   try {
     console.log("Accessing media hardware ");
     localMediaStream = await navigator.mediaDevices.getUserMedia({
@@ -1711,7 +1788,7 @@ async function startPeerVoiceVideoCall() {
     });
     mediaSenders = [];
     localVideoEl.srcObject = localMediaStream;
-    callOverlay.classList.remove("hidden");
+    // callOverlay.classList.remove("hidden");
 
     localMediaStream.getTracks().forEach(track => {
       const sender = peerConnection.addTrack(track, localMediaStream);
@@ -1723,15 +1800,23 @@ async function startPeerVoiceVideoCall() {
 
     await transmitCallSignal({
       subtype: "MEDIA_OFFER",
-      sdp: peerConnection.localDescription
+      sdp: {
+        type: callOffer.type,
+        sdp: callOffer.sdp
+      }
     });
+    showNotification("Calling peer... waiting for answer.", "info");
   } catch (error) {
     console.error("Cannot Access Camera/Microphone: ", error);
+    showNotification("Could not access Camera/Microphone", "error");
     shutDownActiveMediaTracks();
   }
 }
 
 function shutDownActiveMediaTracks() {
+  const callPrompt = document.getElementById("incomingCallPrompt");
+  if(callPrompt) callPrompt.remove();
+  
   if(localMediaStream) {
     localMediaStream.getTracks().forEach(track => track.stop());
     localMediaStream = null;
@@ -1815,18 +1900,31 @@ document.getElementById("fileInput").addEventListener("change", (e) => {
 genOfferBtn.addEventListener("click", generateLocalConnectionOffer);
 acceptRemoteBtn.addEventListener("click", acceptRemotePeerConnection);
 
-window.addEventListener("focus", ()=> {
-  if(!dataChannel || dataChannel.readyState !== "open" || !chatSession.sendChainKey) return;
+window.addEventListener("focus", async ()=> {
+  if(!dataChannel || dataChannel.readyState !== "open" || !chatSession.ackKey) return;
 
-  messageMap.forEach((value, msgId) => {
-    if(value.rowEl.classList.contains("incoming")) return;
-    const rowEl = value.rowEl;
-    dataChannel.send(JSON.stringify({
-      type: "READ_RECEIPT",
-      msgId: msgId
-    }))
-  })
-})
+  for (const [msgId, value] of messageMap.entries()) {
+    if(!value.rowEl.classList.contains("incoming")) continue;
+    if(!value.rowEl.dataset.readAcknowledged === "true") continue;
+
+    value.rowEl.dataset.readAcknowledged = "true";
+    try {
+      const ack = {
+        type: "MSG_ACK",
+        status: "read",
+        msgId
+      };
+      const encryptedAck = await encryptText(JSON.stringify(ack), chatSession.ackKey);
+      dataChannel.send(JSON.stringify({
+        type: "MSG_ACK",
+        iv: encryptedAck.iv,
+        ciphertext: encryptedAck.ciphertext,
+      }));
+    } catch (error) {
+      console.warn("Focus read ack failed: ", error);
+    }
+  };
+});
 
 async function startVoiceRecording() {
   if (!dataChannel || dataChannel.readyState !== "open") {
@@ -1903,6 +2001,7 @@ async function processSendVoiceMsg(audioBlob) {
     dataChannel.send(JSON.stringify({
       type: "FILE_START",
       fileId: uniqueFileId,
+      fileMsgId: clientMsgId,
       name: descriptorLabel,
       mimeType: targetMimeType,
       totalChunks: computedTotalChunks
@@ -1934,6 +2033,17 @@ async function processSendVoiceMsg(audioBlob) {
     console.error("Voice encryption crash: ", error);
   }
 }
+
+document.getElementById("copyOfferBtn").addEventListener("click", () => {
+  const val = localSdpTextArea.value;
+  if(!val) {
+    showNotification("Generate an offer first.", "warning")
+    return;
+  }
+  navigator.clipboard.writeText(val).then(()=>{
+    showNotification("SDP Code copied to clipboard.", "success");
+  }).catch(()=> showNotification("Copy failed. Select and Copy Manually", "error"));
+});
 
 voiceRecordBtn.addEventListener("mousedown", (e)=> {
   e.preventDefault();
